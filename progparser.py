@@ -3,7 +3,6 @@ Programming Register Parser
 """
 import argparse
 import copy
-# import math
 import os
 import pickle
 import shutil
@@ -185,7 +184,7 @@ class PatternList(ReferenceTable):
                 continue
 
             try:
-                if ws.cell(2, j).font.__getattr__('color').rgb == 'FF808080':
+                if ws.cell(2, j).font.__getattr__('color').rgb.lower() == 'ff808080':
                     continue
             except Exception:
                 pass

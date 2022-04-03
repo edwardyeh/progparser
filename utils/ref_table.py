@@ -2,14 +2,14 @@
 Reference table for register parsing
 """
 from dataclasses import dataclass
-from typing import NamedTuple
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from .general import str2int 
 
-class Reg(NamedTuple):
+@dataclass
+class Reg:
 ##{{{
     name: str
     addr: int
@@ -40,7 +40,7 @@ class INIGroup:
 class ReferenceTable:
     """Reference table for register parsing"""
 
-    def __init__(self, is_debug: bool):
+    def __init__(self, is_debug: bool=False):
     #{{{ 
         # reg_table = {addr1: reg_list1, addr2: reg_list2, ...}
         # ini_table = [INIGroup1, INIGroup2, ...]
@@ -179,7 +179,7 @@ class ReferenceTable:
                 msb = str2int(bits[0])
                 lsb = str2int(bits[1]) if len(bits) > 1 else msb
                 try:
-                    is_signed = ws.cell(row_idx, 3).font.__getattr__('color').rgb == 'FF0000FF'
+                    is_signed = ws.cell(row_idx, 3).font.__getattr__('color').rgb.lower() == 'ff0000ff'
                 except Exception:
                     is_signed = False
                 init_val = str(ws.cell(row_idx, 3).value)
@@ -195,7 +195,7 @@ class ReferenceTable:
                 raise e
 
             try:
-                is_access = ws.cell(row_idx, 5).font.__getattr__('color').rgb != 'FF808080'
+                is_access = ws.cell(row_idx, 5).font.__getattr__('color').rgb.lower() != 'ff808080'
             except Exception:
                 is_access = True
             reg = Reg(reg_name, addr, msb, lsb, is_signed, is_access, init_val, comment, row_idx)
@@ -304,16 +304,16 @@ class ReferenceTable:
 
     def xlsx_export(self, is_init: bool, is_rsv_ext: bool=False):
         """Export excel style reference table"""  #{{{
-        GREY_FONT = Font(color='808080')
-        BLUE_FONT = Font(color='0000ff')
+        GREY_FONT = Font(color='ff808080')
+        BLUE_FONT = Font(color='ff0000ff')
 
-        GREEN_FILL = PatternFill(fill_type='solid', start_color='92d050')
-        GREY_FILL = PatternFill(fill_type='solid', start_color='dddddd')
-        ORANGE_FILL = PatternFill(fill_type='solid', start_color='ffcc99')
-        YELLOW_FILL = PatternFill(fill_type='solid', start_color='ffffcc')
-        VIOLET_FILL = PatternFill(fill_type='solid', start_color='e6ccff')
+        GREEN_FILL = PatternFill(fill_type='solid', start_color='ff92d050')
+        GREY_FILL = PatternFill(fill_type='solid', start_color='ffdddddd')
+        ORANGE_FILL = PatternFill(fill_type='solid', start_color='ffffcc99')
+        YELLOW_FILL = PatternFill(fill_type='solid', start_color='ffffffcc')
+        VIOLET_FILL = PatternFill(fill_type='solid', start_color='ffe6ccff')
 
-        THIN_SIDE = Side(border_style='thin', color='000000')
+        THIN_SIDE = Side(border_style='thin', color='ff000000')
         OUTER_BORDER = Border(left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THIN_SIDE)
 
         LT_ALIGN = Alignment(horizontal='left', vertical='top', wrapText=True)
