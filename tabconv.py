@@ -16,12 +16,12 @@
 ## Release History  : 
 ## -FHDR=======================================================================
 
+import argparse
 import os
 import shutil
-import argparse
 import textwrap
-from typing import NamedTuple
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -34,6 +34,7 @@ class Reg(NamedTuple):
     addr: int
     msb: int
     lsb: int
+    is_signed: bool
     is_access: bool
     init_val: int
     comment: str
@@ -56,7 +57,7 @@ class INIGroup:
 #}}}
 
 class RegisterTable:
-    """Programming register table"""
+    """Programming register table"""  #{{{
 
     def __init__(self, table_fp: str, table_type: str, is_debug: bool):
     #{{{ 
@@ -67,6 +68,7 @@ class RegisterTable:
         self.comment_sign = '#'
         self.reg_table = {} 
         self.ini_table = []
+        self.hex_out = set()
 
         if table_type == 'txt':
             self.txt_table_parser(table_fp)
@@ -81,12 +83,12 @@ class RegisterTable:
         with open(table_fp, 'r') as f:
             line = f.readline()
             line_no = 1
-
             while line:
                 toks = line.split()
-
                 if len(toks):
-                    if toks[0] == 'T:':
+                    if toks[0][0] == self.comment_sign:
+                        pass
+                    elif toks[0] == 'T:':
                         try:
                             tag_name = ' '.join(toks[1:]).strip("\"\'")
                             self.ini_table.append(INIGroup(tag_name, 0, []))
@@ -97,7 +99,6 @@ class RegisterTable:
                             print("  'T: <tag_name>'")
                             print("-" * 60)
                             raise e
-
                     elif toks[0] == 'A:':
                         try:
                             addr = self.str2int(toks[1])
@@ -110,25 +111,35 @@ class RegisterTable:
                             print("  'A: <addr> <title>'")
                             print("-" * 60)
                             raise e
-
+                    elif toks[0] == 'H:':
+                        for reg in toks[1:]:
+                            if reg[0] == self.comment_sign:
+                                break
+                            self.hex_out.add(reg.upper())
                     else:
                         try:
                             reg_name = toks[0].upper()
                             addr = self.str2int(toks[1])
                             msb = self.str2int(toks[2])
                             lsb = self.str2int(toks[3])
-                            is_access = self.access_check(toks[4])
-                            init_val = self.str2int(toks[5])
-                            comment = ' '.join(toks[6:]).strip("\"\'") if len(toks) > 6 else None
+                            is_signed = self.sign_check(toks[4])
+                            is_access = self.access_check(toks[5])
+                            init_val = self.str2int(toks[6], is_signed, msb - lsb + 1)
+                            if len(toks) > 7:
+                                comment = ' '.join(toks[7:])
+                                comment = None if comment[0] == self.comment_sign else\
+                                            comment.split(self.comment_sign)[0].strip("\"\' ")
+                            else:
+                                comment = None
                         except Exception as e:
                             print("-" * 70)
                             print("TableParseError: (line: {})".format(line_no))
                             print("syntax of register descriptor:")
-                            print("  '<name> <addr> <msb> <lsb> <is_access> <init_val> [comment]'")
+                            print("  '<name> <addr> <msb> <lsb> <sign_type> <is_access> <init_val> [comment]'")
                             print("-" * 70)
                             raise e
 
-                        reg = Reg(reg_name, addr, msb, lsb, is_access, init_val, comment, None)
+                        reg = Reg(reg_name, addr, msb, lsb, is_signed, is_access, init_val, comment, None)
                         reg_list = self.reg_table.setdefault(addr, RegList(None, []))
                         reg_list.regs.append(reg)
 
@@ -141,7 +152,6 @@ class RegisterTable:
                         reg_len = len(reg_name)
                         if reg_len > ini_grp.max_len:
                             ini_grp.max_len = reg_len
-
                         ini_grp.regs.append(reg)
 
                 line = f.readline()
@@ -157,13 +167,10 @@ class RegisterTable:
         wb = openpyxl.load_workbook(table_fp, data_only=True)
         ws = wb.worksheets[0]
         addr_col = tuple(ws.iter_cols(1, 1, None, None, True))[0]
-
         for i in range(addr_col.index('ADDR')+1, len(addr_col)):
             row_idx = i + 1
-
             if addr_col[i] is not None:
                 addr = str(addr_col[i])
-
                 if addr == 'none':
                     break
                 else:
@@ -190,13 +197,15 @@ class RegisterTable:
                     self.reg_table[addr] = reg_list
 
             try:
-                init_val = self.str2int(str(ws.cell(row_idx, 3).value))
-
                 bits = str(ws.cell(row_idx, 4).value).split('_')
                 msb = self.str2int(bits[0])
                 lsb = self.str2int(bits[1]) if len(bits) > 1 else msb
-
-                toks = str(ws.cell(row_idx, 5).value).split('\n');
+                try:
+                    is_signed = ws.cell(row_idx, 3).font.__getattr__("color").rgb == "FF0000FF"
+                except Exception:
+                    is_signed = False
+                init_val = self.str2int(str(ws.cell(row_idx, 3).value), is_signed, msb - lsb + 1)
+                toks = str(ws.cell(row_idx, 5).value).split('\n')
                 reg_name = toks[0].strip().upper()
                 comment = None if len(toks) == 1 else ', '.join([tok.strip() for tok in toks[1:]])
             except Exception as e:
@@ -206,8 +215,11 @@ class RegisterTable:
                 print("-" * 60)
                 raise e
 
-            is_access = not ws.cell(row_idx, 5).font.__getattr__('color')
-            reg = Reg(reg_name, addr, msb, lsb, is_access, init_val, comment, row_idx)
+            try:
+                is_access = ws.cell(row_idx, 5).font.__getattr__("color").rgb != "FF808080"
+            except Exception:
+                is_access = True
+            reg = Reg(reg_name, addr, msb, lsb, is_signed, is_access, init_val, comment, row_idx)
             reg_list.regs.append(reg)
 
             if len(self.ini_table):
@@ -232,29 +244,28 @@ class RegisterTable:
         """Export text style reference table"""  #{{{
         with open('table_dump.txt', 'w') as f:
             is_first_tag = True
-
             for ini_grp in self.ini_table:
                 if ini_grp.tag is not None:
                     if is_first_tag:
                         is_first_tag = False
                     else:
                         f.write("\n")
-
                     f.write(f"T: {ini_grp.tag}\n\n")
 
                 max_len = (ini_grp.max_len + 3) >> 2 << 2
-
                 if max_len == ini_grp.max_len:
                     max_len += 4
 
                 for reg in ini_grp.regs:
-                    f.write("{}{}{:<#8x}{:<4}{:<4}{:<4}{:<#12x}".format(
-                        reg.name.lower(), " " * (max_len - len(reg.name)),
+                    init_val = reg.init_val & ((1 << (reg.msb - reg.lsb + 1)) - 1)
+                    f.write("{}{:<#8x}{:<4}{:<4}{:<4}{:<4}{:<#12x}".format(
+                        reg.name.lower().ljust(max_len),
                         reg.addr, 
                         reg.msb, 
                         reg.lsb, 
-                        "y" if reg.is_access else "n", 
-                        reg.init_val))
+                        's' if reg.is_signed else 'u',
+                        'y' if reg.is_access else 'n', 
+                        init_val))
 
                     if reg.comment is not None:
                         f.write(f"\"{reg.comment}\"\n")
@@ -262,46 +273,56 @@ class RegisterTable:
                         f.write("\n")
 
             is_first_title = True
-
             for addr, reg_list in self.reg_table.items():
                 if reg_list.title is not None:
                     if is_first_title:
                         is_first_title = False
-                        f.write("\n")
+                        f.write("\n### Register Title ###\n\n")
                     f.write(f"A: {addr:<#8x}\"{reg_list.title}\"\n")
+            f.write("\n")
+
+            is_first_hex = True
+            for reg in self.hex_out:
+                if is_first_hex:
+                    is_first_hex = False
+                    f.write("### Hex Out Reg ###\n\n")
+                f.write(f"HEX: {reg.lower()}\n")
             f.write("\n")
 
         if is_init:
             with open('reg_dump.ini', 'w') as f:
                 is_first_tag = True
-
                 for ini_grp in self.ini_table:
                     if ini_grp.tag is not None:
                         if is_first_tag:
                             is_first_tag = False
                         else:
                             f.write("\n")
-
                         f.write(f"[{ini_grp.tag}]\n")
 
                     for reg in ini_grp.regs:
                         if reg.is_access:
-                            f.write("{}{}".format(reg.name.lower(), " " * (ini_grp.max_len - len(reg.name))))
-
-                            if reg.name.find("ADDR") == -1:
-                                f.write(f" = {reg.init_val}")
+                            if reg.name in self.hex_out:
+                                if reg.init_val > 0xffff:
+                                    lens = ini_grp.max_len + 16
+                                    f.write(f"{reg.name.lower()} = {reg.init_val:#010x}".ljust(lens))
+                                else:
+                                    lens = ini_grp.max_len + 12
+                                    f.write(f"{reg.name.lower()} = {reg.init_val:#06x}".ljust(lens))
                             else:
-                                f.write(f" = {reg.init_val:<#010x}")
+                                lens = ini_grp.max_len + 11
+                                f.write(f"{reg.name.lower()} = {reg.init_val}".ljust(lens))
 
                             if reg.comment is not None:
-                                f.write(f"  # {reg.comment}\n")
+                                f.write(f" # {reg.comment}\n")
                             else:
                                 f.write("\n")
     #}}}
 
-    def xls_export(self, is_init: bool):
+    def xls_export(self, is_init: bool, is_rsv_ext: bool=False):
         """Export excel style reference table"""  #{{{
         GREY_FONT = Font(color='808080')
+        BLUE_FONT = Font(color='0000ff')
 
         GREEN_FILL = PatternFill(fill_type='solid', start_color='92d050')
         GREY_FILL = PatternFill(fill_type='solid', start_color='dddddd')
@@ -352,7 +373,6 @@ class RegisterTable:
                 cell.alignment = CC_ALIGN
 
         values = ['Chip', 'Eng.', 'Date']
-
         for row, val in enumerate(values, start=2):
             cell = ws.cell(row, 1, val)
             cell.fill = ORANGE_FILL
@@ -360,7 +380,6 @@ class RegisterTable:
             cell.alignment = CC_ALIGN
 
         values = ['Number', 'FileName', 'Metion1', 'Metion2', 'PatternStatus']
-
         for row, val in enumerate(values, start=1):
             cell = ws.cell(row, 5, val)
             cell.fill = YELLOW_FILL
@@ -406,10 +425,15 @@ class RegisterTable:
         # Dump register
 
         row_st = row_ed = 7
-
-        for addr in sorted(tuple(self.reg_table.keys())):
-            reg_list = self.reg_table[addr]
+        for addr in range(0, max(self.reg_table.keys()) + 4, 4):
             is_first_reg = True
+
+            if addr in self.reg_table:
+                reg_list = self.reg_table[addr]
+            elif is_rsv_ext:
+                reg_list = RegList("reserved", [Reg("RESERVED", addr, 31, 0, False, False, 0, None, None)])
+            else:
+                continue
 
             for reg in sorted(reg_list.regs, key=lambda reg: reg.lsb):
                 cell_fill = YELLOW_FILL if is_first_reg else PatternFill()
@@ -429,7 +453,9 @@ class RegisterTable:
                 cell.border = OUTER_BORDER
                 cell.alignment = LT_ALIGN
 
-                cell = ws.cell(row_ed, 3, hex(reg.init_val))
+                init_val = reg.init_val & ((1 << (reg.msb - reg.lsb + 1)) - 1)
+                cell = ws.cell(row_ed, 3, hex(init_val))
+                cell.font = BLUE_FONT if reg.is_signed else Font()
                 cell.fill = cell_fill
                 cell.border = OUTER_BORDER
                 cell.alignment = RT_ALIGN
@@ -438,7 +464,6 @@ class RegisterTable:
                     cell = ws.cell(row_ed, 4, str(reg.msb))
                 else:
                     cell = ws.cell(row_ed, 4, '_'.join([str(reg.msb), str(reg.lsb)]))
-
                 cell.fill = cell_fill
                 cell.border = OUTER_BORDER
                 cell.alignment = RT_ALIGN
@@ -451,14 +476,13 @@ class RegisterTable:
                     toks = [] if reg.comment is None else reg.comment.split(',')
                     members = [reg.name] + [tok.strip() for tok in toks]
                     cell = ws.cell(row_ed, 5, '\n'.join(members))
-
                 cell.font = cell_font
                 cell.fill = cell_fill
                 cell.border = OUTER_BORDER
                 cell.alignment = LT_ALIGN
 
                 if is_init:
-                    cell = ws.cell(row_ed, 6, f"{reg.init_val:X}")
+                    cell = ws.cell(row_ed, 6, f"{init_val:X}")
                     cell.font = cell_font
                     cell.fill = cell_fill
                     cell.border = OUTER_BORDER
@@ -480,18 +504,61 @@ class RegisterTable:
         cell.fill = GREY_FILL
         cell.border = OUTER_BORDER
         cell.alignment = CC_ALIGN
+        row_ed += 2
+
+        cell = ws.cell(row_ed, 1, 'Blue INI: ')
+        cell.font = BLUE_FONT
+        cell.alignment = RC_ALIGN
+        cell = ws.cell(row_ed, 2, 'signed register')
+        cell.font = BLUE_FONT
+        cell.alignment = LC_ALIGN
+        row_ed += 1
+
+        cell = ws.cell(row_ed, 1, 'Grey Member: ')
+        cell.font = GREY_FONT
+        cell.alignment = RC_ALIGN
+        cell = ws.cell(row_ed, 2, 'private register')
+        cell.font = GREY_FONT
+        cell.alignment = LC_ALIGN
         row_ed += 1
 
         wb.save("table_dump.xlsx")
         wb.close()
     #}}}
 
-    def str2int(self, str_: str) -> int:
+    def str2int(self, str_: str, is_signed: bool=False, bits: int=32) -> int:
         """Convert string to integer (with HEX check)"""  #{{{
         if str_.startswith('0x') or str_.startswith('0X') :
-            return int(str_, 16)
+            num = int(str_, 16)
+            if num >> bits:
+                raise ValueError("number overflow")
+            if is_signed:
+                sign = num >> (bits - 1)
+                num |= ~((sign << bits) - 1)
         else:
-            return int(str_)
+            num = int(str_)
+            if is_signed:
+                bits -= 1
+            if not is_signed and num < 0:
+                raise ValueError("negative value founded in unsigned mode.")
+            elif num > 0 and abs(num) >= (1 << bits):
+                raise ValueError("number overflow")
+            elif num < 0 and abs(num) > (1 << bits):
+                raise ValueError("number overflow")
+                
+        return num
+    #}}}
+
+    def sign_check(self, str_: str) -> bool:
+        """Syntax check for sign type flag"""  #{{{
+        str_ = str_.lower()
+
+        if str_ == 's':
+            return True
+        elif str_ == 'u':
+            return False
+        else:
+            raise SyntaxError("sign type flag must be 's' or 'u'")
     #}}}
 
     def access_check(self, str_: str) -> bool:
@@ -503,19 +570,18 @@ class RegisterTable:
         elif str_ == 'n':
             return False
         else:
-            raise SyntaxError("access flga must be 'y' or 'n'")
+            raise SyntaxError("access flag must be 'y' or 'n'")
     #}}}
 
     def show_reg_table(self, msg: str):
         """Show register table"""  #{{{
         print(msg)
         reg_cnt = 0
-
         for addr, reg_list in self.reg_table.items():
             print(f"Addr: {addr:#06x} Title: {reg_list.title}")
             for reg in reg_list.regs:
-                print("  Reg:      {}, {}, {}, {}, {}".format(
-                    reg.name, reg.msb, reg.lsb, reg.is_access, reg.init_val))
+                print("  Reg:      {}, {}, {}, {}, {}, {}".format(
+                    reg.name, reg.msb, reg.lsb, reg.is_signed, reg.is_access, reg.init_val))
                 print("  Comment:  {}".format(reg.comment))
                 print("  RowIndex: {}\n".format(reg.row_idx))
                 reg_cnt += 1
@@ -527,16 +593,17 @@ class RegisterTable:
         """Show ini table"""  #{{{
         print(msg)
         reg_cnt = 0
-
         for ini_grp in self.ini_table:
             print(f"Tag: {ini_grp.tag}")
             for reg in ini_grp.regs:
-                blank = ' ' * (ini_grp.max_len - len(reg.name))
-                print(f"  {reg.name}{blank} = {reg.init_val}")
+                print("  {} = {}".format(
+                        reg.name.ljust(ini_grp.max_len),
+                        reg.init_val))
                 reg_cnt += 1
 
         print(f"\nregister count: {reg_cnt}\n")
     #}}}
+#}}}
 
 ### Main Function ###
 
@@ -569,7 +636,7 @@ def main(is_debug=False):
     if args.out_type == 'txt':
         pat_list.txt_export(args.is_init)
     elif args.out_type == 'xls':
-        pat_list.xls_export(args.is_init)
+        pat_list.xls_export(args.is_init, is_rsv_ext=True)
     else:
         raise ValueError(f"Unsupported output table type ({args.out_type})")
 #}}}
