@@ -2,12 +2,9 @@
 Programming reference table convertor
 """
 import argparse
-import os
-import shutil
 import sys
 import textwrap
 
-from .utils.general import str2int
 from .utils.ref_table import ReferenceTable
 
 ### Class Definition ###
@@ -34,19 +31,19 @@ def main(is_debug=False):
     """Main function"""  #{{{
     parser = argparse.ArgumentParser(
             formatter_class=argparse.RawTextHelpFormatter,
-            description=textwrap.dedent('''
+            description=textwrap.dedent("""
                 Programming register table converter.
-                '''))
+                """))
 
     parser.add_argument('in_type', metavar='input_type', 
-                                    help='input type (option: txt/xlsx)') 
+                                    help="input type (option: txt/xlsx)") 
     parser.add_argument('out_type', metavar='output_type', 
-                                    help='output type (option: txt/xlsx)') 
+                                    help="output type (option: txt/xlsx)") 
     parser.add_argument('table_fp', metavar='table_in',
-                                    help='reference table in') 
+                                    help="reference table in") 
 
     parser.add_argument('-i', dest='is_init', action='store_true', 
-                                help='create initial pattern')
+                                help="create initial pattern")
 
     args = parser.parse_args()
 
