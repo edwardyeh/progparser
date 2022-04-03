@@ -182,7 +182,8 @@ class ReferenceTable:
                     is_signed = ws.cell(row_idx, 3).font.__getattr__('color').rgb == 'FF0000FF'
                 except Exception:
                     is_signed = False
-                init_val = str2int(str(ws.cell(row_idx, 3).value), is_signed, msb - lsb + 1)
+                init_val = str(ws.cell(row_idx, 3).value)
+                init_val = 0 if init_val == 'None' else str2int(init_val, is_signed, msb - lsb + 1)
                 toks = str(ws.cell(row_idx, 5).value).split('\n')
                 reg_name = toks[0].strip().upper()
                 comment = None if len(toks) == 1 else ', '.join([tok.strip() for tok in toks[1:]])

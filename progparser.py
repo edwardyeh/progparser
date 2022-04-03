@@ -243,6 +243,7 @@ class PatternList(ReferenceTable):
                                     reg_bits = reg.msb - reg.lsb + 1
                                     reg_val = str2int(pat.regs[reg.name], reg.is_signed, reg_bits)
                                 else:
+                                    print(f"[Warning] '{reg.name.lower()}' is not found in pattern '{pat.name}', use default value.")
                                     reg_val = reg.init_val
                             except Exception as e:
                                 print('-' * 60)
@@ -284,17 +285,22 @@ class PatternList(ReferenceTable):
                         for reg in self.reg_table[addr].regs:
                             bits = reg.msb - reg.lsb + 1
                             mask = (1 << bits) - 1
+                            is_reg_exist = reg.name in pat.regs
 
-                            if reg.is_access and reg.name in pat.regs:
-                                try:
-                                    reg_val = str2int(pat.regs[reg.name], reg.is_signed, bits)
-                                except Exception as e:
-                                    print("-" * 60)
-                                    print("RegisterValueError:")
-                                    print("pattern:  {}".format(pat.name))
-                                    print("register: {}".format(reg.name))
-                                    print("-" * 60)
-                                    raise e
+                            if reg.is_access:
+                                if is_reg_exist:
+                                    try:
+                                        reg_val = str2int(pat.regs[reg.name], reg.is_signed, bits)
+                                    except Exception as e:
+                                        print('-' * 60)
+                                        print("RegisterValueError:")
+                                        print("pattern:  {}".format(pat.name))
+                                        print("register: {}".format(reg.name))
+                                        print('-' * 60)
+                                        raise e
+                                else:
+                                    print(f"[Warning] '{reg.name.lower()}' is not found in pattern '{pat.name}', use default value.")
+                                    reg_val = reg.init_val
                             else:
                                 reg_val = reg.init_val
 
@@ -338,6 +344,7 @@ class PatternList(ReferenceTable):
                     if not reg.is_access:
                         reg_val = 0
                     elif reg.name not in pat.regs:
+                        print(f"[Warning] '{reg.name}' is not found in pattern '{pat.name}', use default value.")
                         reg_val = reg.init_val
                     else:
                         try:
