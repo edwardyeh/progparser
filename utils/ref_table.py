@@ -46,7 +46,6 @@ class ReferenceTable:
         # ini_table = [INIGroup1, INIGroup2, ...]
 
         self.is_debug = is_debug
-        self.comment_sign = '#'
         self.reg_table = {} 
         self.ini_table = []
         self.hex_out = set()
@@ -60,34 +59,37 @@ class ReferenceTable:
             while line:
                 toks = line.split()
                 if len(toks):
-                    if toks[0][0] == self.comment_sign:
+                    if toks[0][0] == '#':
                         pass
                     elif toks[0] == 'T:':
                         try:
-                            tag_name = ' '.join(toks[1:]).strip("\"\'")
+                            tag_name = ' '.join(toks[1:]).split('#')[0].strip("\"\' ")
                             self.ini_table.append(INIGroup(tag_name, 0, []))
                         except Exception as e:
-                            print("-" * 60)
+                            print('-' * 60)
                             print("TableParseError: (line: {})".format(line_no))
                             print("syntax of group descriptor:")
                             print("  'T: <tag_name>'")
-                            print("-" * 60)
+                            print('-' * 60)
                             raise e
                     elif toks[0] == 'A:':
                         try:
                             addr = str2int(toks[1])
                             reg_list = self.reg_table.setdefault(addr, RegList(None, []))
-                            reg_list.title = ' '.join(toks[2:]).strip("\"\'") if len(toks) > 2 else None
+                            if len(toks) > 2:
+                                reg_list.title = ' '.join(toks[2:]).split('#')[0].strip("\"\' ")
+                            else:
+                                reg_list.title = None
                         except Exception as e:
-                            print("-" * 60)
+                            print('-' * 60)
                             print("TableParseError: (line: {})".format(line_no))
                             print("syntax of address descriptor:")
                             print("  'A: <addr> <title>'")
-                            print("-" * 60)
+                            print('-' * 60)
                             raise e
                     elif toks[0] == 'H:':
                         for reg in toks[1:]:
-                            if reg[0] == self.comment_sign:
+                            if reg[0] == '#':
                                 break
                             self.hex_out.add(reg.upper())
                     elif toks[0] == '===':
@@ -103,16 +105,16 @@ class ReferenceTable:
                             init_val = str2int(toks[6], is_signed, msb - lsb + 1)
                             if len(toks) > 7:
                                 comment = ' '.join(toks[7:])
-                                comment = None if comment[0] == self.comment_sign else\
-                                            comment.split(self.comment_sign)[0].strip("\"\' ")
+                                comment = None if comment[0] == '#' else\
+                                            comment.split('#')[0].strip("\"\' ")
                             else:
                                 comment = None
                         except Exception as e:
-                            print("-" * 70)
+                            print('-' * 70)
                             print("TableParseError: (line: {})".format(line_no))
                             print("syntax of register descriptor:")
                             print("  '<name> <addr> <msb> <lsb> <sign_type> <is_access> <init_val> [comment]'")
-                            print("-" * 70)
+                            print('-' * 70)
                             raise e
 
                         reg = Reg(reg_name, addr, msb, lsb, is_signed, is_access, init_val, comment, None)
@@ -138,7 +140,7 @@ class ReferenceTable:
             self.show_ini_table("=== INI TABLE PARSER ===")
     #}}}
 
-    def xls_table_parser(self, table_fp: str):
+    def xlsx_table_parser(self, table_fp: str):
         """Parse excel style reference table"""  #{{{
         wb = openpyxl.load_workbook(table_fp, data_only=True)
         ws = wb.worksheets[0]
@@ -153,17 +155,17 @@ class ReferenceTable:
                     try:
                         addr = str2int(addr)
                     except Exception as e:
-                        print("-" * 60)
+                        print('-' * 60)
                         print("ExcelParseError: (row: {})".format(row_idx))
                         print("address syntax error.")
-                        print("-" * 60)
+                        print('-' * 60)
                         raise e
 
                     if addr in self.reg_table:
-                        print("-" * 60)
+                        print('-' * 60)
                         print("ExcelParseError: (row: {})".format(row_idx))
                         print("the addess is existed in the table.")
-                        print("-" * 60)
+                        print('-' * 60)
                         raise SyntaxError
 
                     title = ws.cell(row_idx, 2).value
@@ -177,7 +179,7 @@ class ReferenceTable:
                 msb = str2int(bits[0])
                 lsb = str2int(bits[1]) if len(bits) > 1 else msb
                 try:
-                    is_signed = ws.cell(row_idx, 3).font.__getattr__("color").rgb == "FF0000FF"
+                    is_signed = ws.cell(row_idx, 3).font.__getattr__('color').rgb == 'FF0000FF'
                 except Exception:
                     is_signed = False
                 init_val = str2int(str(ws.cell(row_idx, 3).value), is_signed, msb - lsb + 1)
@@ -185,14 +187,14 @@ class ReferenceTable:
                 reg_name = toks[0].strip().upper()
                 comment = None if len(toks) == 1 else ', '.join([tok.strip() for tok in toks[1:]])
             except Exception as e:
-                print("-" * 60)
+                print('-' * 60)
                 print("ExcelParseError: (row: {})".format(row_idx))
                 print("register syntax error (INI/Bits/Member).")
-                print("-" * 60)
+                print('-' * 60)
                 raise e
 
             try:
-                is_access = ws.cell(row_idx, 5).font.__getattr__("color").rgb != "FF808080"
+                is_access = ws.cell(row_idx, 5).font.__getattr__('color').rgb != 'FF808080'
             except Exception:
                 is_access = True
             reg = Reg(reg_name, addr, msb, lsb, is_signed, is_access, init_val, comment, row_idx)
@@ -252,21 +254,21 @@ class ReferenceTable:
                     else:
                         f.write("\n")
 
+            is_first_hex = True
+            for reg in self.hex_out:
+                if is_first_hex:
+                    is_first_hex = False
+                    f.write("\n### Hex Out Reg ###\n\n")
+                f.write(f"H: {reg.lower()}\n")
+            f.write("\n")
+
             is_first_title = True
             for addr, reg_list in self.reg_table.items():
                 if reg_list.title is not None:
                     if is_first_title:
                         is_first_title = False
-                        f.write("\n### Register Title ###\n\n")
+                        f.write("### Register Title ###\n\n")
                     f.write(f"A: {addr:<#8x}\"{reg_list.title}\"\n")
-            f.write("\n")
-
-            is_first_hex = True
-            for reg in self.hex_out:
-                if is_first_hex:
-                    is_first_hex = False
-                    f.write("### Hex Out Reg ###\n\n")
-                f.write(f"H: {reg.lower()}\n")
             f.write("\n")
 
         if is_init:
@@ -299,7 +301,7 @@ class ReferenceTable:
                                 f.write("\n")
     #}}}
 
-    def xls_export(self, is_init: bool, is_rsv_ext: bool=False):
+    def xlsx_export(self, is_init: bool, is_rsv_ext: bool=False):
         """Export excel style reference table"""  #{{{
         GREY_FONT = Font(color='808080')
         BLUE_FONT = Font(color='0000ff')
@@ -411,7 +413,7 @@ class ReferenceTable:
             if addr in self.reg_table:
                 reg_list = self.reg_table[addr]
             elif is_rsv_ext:
-                reg_list = RegList("reserved", [Reg("RESERVED", addr, 31, 0, False, False, 0, None, None)])
+                reg_list = RegList('reserved', [Reg('RESERVED', addr, 31, 0, False, False, 0, None, None)])
             else:
                 continue
 
@@ -486,23 +488,23 @@ class ReferenceTable:
         cell.alignment = CC_ALIGN
         row_ed += 2
 
-        cell = ws.cell(row_ed, 1, 'Blue INI: ')
+        cell = ws.cell(row_ed, 1, "Blue INI: ")
         cell.font = BLUE_FONT
         cell.alignment = RC_ALIGN
-        cell = ws.cell(row_ed, 2, 'signed register')
+        cell = ws.cell(row_ed, 2, "signed register")
         cell.font = BLUE_FONT
         cell.alignment = LC_ALIGN
         row_ed += 1
 
-        cell = ws.cell(row_ed, 1, 'Grey Member: ')
+        cell = ws.cell(row_ed, 1, "Grey Member: ")
         cell.font = GREY_FONT
         cell.alignment = RC_ALIGN
-        cell = ws.cell(row_ed, 2, 'private register')
+        cell = ws.cell(row_ed, 2, "private register")
         cell.font = GREY_FONT
         cell.alignment = LC_ALIGN
         row_ed += 1
 
-        wb.save("table_dump.xlsx")
+        wb.save('table_dump.xlsx')
         wb.close()
     #}}}
 

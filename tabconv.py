@@ -21,8 +21,8 @@ class RegisterTable(ReferenceTable):
 
         if table_type == 'txt':
             self.txt_table_parser(table_fp)
-        elif table_type == 'xls':
-            self.xls_table_parser(table_fp)
+        elif table_type == 'xlsx':
+            self.xlsx_table_parser(table_fp)
         else:
             raise ValueError(f"Unsupported input table style '{table_type}'")
     #}}}
@@ -39,9 +39,9 @@ def main(is_debug=False):
                 '''))
 
     parser.add_argument('in_type', metavar='input_type', 
-                                    help='input type (option: txt/xls)') 
+                                    help='input type (option: txt/xlsx)') 
     parser.add_argument('out_type', metavar='output_type', 
-                                    help='output type (option: txt/xls)') 
+                                    help='output type (option: txt/xlsx)') 
     parser.add_argument('table_fp', metavar='table_in',
                                     help='reference table in') 
 
@@ -58,8 +58,8 @@ def main(is_debug=False):
 
     if args.out_type == 'txt':
         pat_list.txt_export(args.is_init)
-    elif args.out_type == 'xls':
-        pat_list.xls_export(args.is_init, is_rsv_ext=True)
+    elif args.out_type == 'xlsx':
+        pat_list.xlsx_export(args.is_init, is_rsv_ext=True)
     else:
         raise ValueError(f"Unsupported output table type ({args.out_type})")
 #}}}
