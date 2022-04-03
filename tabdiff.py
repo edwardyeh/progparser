@@ -132,9 +132,9 @@ def main(is_debug=False):
                 Programming reference table comparer.
                 '''))
 
-    parser.add_argument('l_type', metavar='left_type', 
+    parser.add_argument('l_type', metavar='left_type', choices=['txt', 'xlsx'], 
                                     help="left table type (option: txt/xlsx)") 
-    parser.add_argument('r_type', metavar='right_type', 
+    parser.add_argument('r_type', metavar='right_type', choices=['txt', 'xlsx'], 
                                     help="right table type (option: txt/xlsx)") 
     parser.add_argument('l_table_fp', metavar='left_table',
                                     help="left reference table") 

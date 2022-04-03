@@ -35,9 +35,9 @@ def main(is_debug=False):
                 Programming register table converter.
                 """))
 
-    parser.add_argument('in_type', metavar='input_type', 
+    parser.add_argument('in_type', metavar='input_type', choices=['txt', 'xlsx'],
                                     help="input type (option: txt/xlsx)") 
-    parser.add_argument('out_type', metavar='output_type', 
+    parser.add_argument('out_type', metavar='output_type', choices=['txt', 'xlsx'], 
                                     help="output type (option: txt/xlsx)") 
     parser.add_argument('table_fp', metavar='table_in',
                                     help="reference table in") 
@@ -55,10 +55,8 @@ def main(is_debug=False):
 
     if args.out_type == 'txt':
         pat_list.txt_export(args.is_init)
-    elif args.out_type == 'xlsx':
-        pat_list.xlsx_export(args.is_init, is_rsv_ext=True)
     else:
-        raise ValueError(f"Unsupported output table type ({args.out_type})")
+        pat_list.xlsx_export(args.is_init, is_rsv_ext=True)
 #}}}
 
 if __name__ == '__main__':

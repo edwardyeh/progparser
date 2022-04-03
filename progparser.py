@@ -443,40 +443,43 @@ def main(is_debug=False):
                 to excel format by excel-style reference table is necessary.
                 """))
 
-    parser.add_argument('in_fmt', metavar='format_in', type=str, 
-                                    help="input format (option: ini/hex/xlsx)") 
-    parser.add_argument('out_fmt', metavar='format_out', type=str, 
-                                    help="output format (option: ini/hex/xlsx)") 
+    parser.add_argument('in_fmt', metavar='format_in', choices=['ini', 'hex', 'xlsx'],
+                                    help="input format (choices: ini/hex/xlsx)") 
+    parser.add_argument('out_fmt', metavar='format_out', choices=['ini', 'hex', 'xlsx'], 
+                                    help="output format (choices: ini/hex/xlsx)") 
     parser.add_argument('pat_in_fp', metavar='pattern_in', type=str, 
                                     help="input pattern path") 
 
-    parser.add_argument('-t', dest='txt_table_fp', metavar='<path>', type=str, 
-                                help="use text-style reference table")
-    parser.add_argument('-x', dest='xlsx_table_fp', metavar='<path>', type=str,
-                                help=textwrap.dedent("""\
-                                use excel-style reference table 
-                                (copy current table when excel out)"""))
-    parser.add_argument('-X', dest='xlsx_table_fp2', metavar='<path>', type=str,
-                                help=textwrap.dedent("""\
-                                use excel-style reference table 
-                                (create new table when excel out)"""))
-    parser.add_argument('-d', dest='database_fp', metavar='<path>', type=str,
-                                help=textwrap.dedent("""\
-                                use pre-parsed reference table database (pickle type)"""))
+    table_gparser = parser.add_mutually_exclusive_group(required=True)
+    table_gparser.add_argument('-t', dest='txt_table_fp', metavar='<path>', type=str, 
+                                        help="use text-style reference table")
+    table_gparser.add_argument('-x', dest='xlsx_table_fp', metavar='<path>', type=str,
+                                        help=textwrap.dedent("""\
+                                        use excel-style reference table (current table append)"""))
+    table_gparser.add_argument('-X', dest='xlsx_table_fp2', metavar='<path>', type=str,
+                                        help=textwrap.dedent("""\
+                                        use excel-style reference table (new table create)"""))
+    table_gparser.add_argument('-d', dest='database_fp', metavar='<path>', type=str,
+                                        help=textwrap.dedent("""\
+                                        use pre-parsed reference table database (pickle type)"""))
+
     parser.add_argument('-b', dest='is_batch', action='store_true', 
                                 help="enable batch mode")
     parser.add_argument('-s', dest='start_id', metavar='<id>', type=int, default=0,
                                 help="start pattern index")
     parser.add_argument('-e', dest='end_id', metavar='<id>', type=int, default=0,
                                 help="end pattern index")
-    parser.add_argument('-o', dest='pat_out_fp', metavar='<path>', type=str,
-                                help=textwrap.dedent("""\
-                                specify output file path 
-                                (ignore when ini/hex out at batch mode)"""))
-    parser.add_argument('-O', dest='force_pat_out_fp', metavar='<path>', type=str,
-                                help=textwrap.dedent("""\
-                                specify output file path 
-                                (force overwrite, ignore when ini/hex out at batch mode)"""))
+
+    out_gparser = parser.add_mutually_exclusive_group()
+    out_gparser.add_argument('-o', dest='pat_out_fp', metavar='<path>', type=str,
+                                    help=textwrap.dedent("""\
+                                    specify output file path 
+                                    (ignore when ini/hex out at batch mode)"""))
+    out_gparser.add_argument('-O', dest='force_pat_out_fp', metavar='<path>', type=str,
+                                    help=textwrap.dedent("""\
+                                    specify output file path 
+                                    (force overwrite, ignore when ini/hex out at batch mode)"""))
+
     parser.add_argument('-p', dest='pickle_out_fp', metavar='<path>', type=str,
                                 help=textwrap.dedent("""\
                                 export reference table database (pickle type)"""))
@@ -485,23 +488,20 @@ def main(is_debug=False):
 
     ## Parser register table
 
-    pat_list = None
-    is_init = False
-    if args.txt_table_fp is not None:
+    if args.txt_table_fp:
         pat_list = PatternList(args.txt_table_fp, 'txt', is_debug)
-    elif args.xlsx_table_fp is not None:
+    elif args.xlsx_table_fp:
         pat_list = PatternList(args.xlsx_table_fp, 'xlsx', is_debug)
-    elif args.xlsx_table_fp2 is not None:
+    elif args.xlsx_table_fp2:
         pat_list = PatternList(args.xlsx_table_fp2, 'xlsx', is_debug)
-        is_init = True
-    elif args.database_fp is not None:
-        pat_list = PatternList(args.database_fp, 'db', is_debug)
     else:
-        raise TypeError("missing the register table (please set -c or -x or -X)")
+        pat_list = PatternList(args.database_fp, 'db', is_debug)
+
+    is_init = True if args.xlsx_table_fp2 else False
 
     ## Only dump reference table database
 
-    if args.pickle_out_fp is not None:
+    if args.pickle_out_fp:
         pat_list.export_table_db(args.pickle_out_fp)
         return 0
 
@@ -511,12 +511,8 @@ def main(is_debug=False):
         pat_list.ini_parser(args.pat_in_fp, args.is_batch, args.start_id, args.end_id) 
     elif args.in_fmt == 'hex':
         pat_list.hex_parser(args.pat_in_fp, args.is_batch, args.start_id, args.end_id)
-    elif args.in_fmt == 'xlsx':
-        # if args.xlsx_table_fp is None and args.xlsx_table_fp2 is None:
-        #     raise TypeError('need an excel register table when input excel file')
-        pat_list.xlsx_parser(args.pat_in_fp, args.is_batch, args.start_id, args.end_id)
     else:
-        raise ValueError(f"unknown input type ({args.in_fmt})")
+        pat_list.xlsx_parser(args.pat_in_fp, args.is_batch, args.start_id, args.end_id)
 
     ## Dump pattern
 
@@ -545,15 +541,13 @@ def main(is_debug=False):
         pat_list.ini_dump(pat_out_fp)
     elif args.out_fmt == 'hex':
         pat_list.hex_dump(pat_out_fp)
-    elif args.out_fmt == 'xlsx':
-        if args.xlsx_table_fp is not None:
+    else:
+        if args.xlsx_table_fp:
             pat_list.xlsx_dump(args.xlsx_table_fp, pat_out_fp, is_init)
-        elif args.xlsx_table_fp2 is not None:
+        elif args.xlsx_table_fp2:
             pat_list.xlsx_dump(args.xlsx_table_fp2, pat_out_fp, is_init)
         else:
             raise TypeError("need an excel register table when output excel file")
-    else:
-        raise ValueError(f"unknown output type ({args.out_fmt})")
 #}}}
 
 if __name__ == '__main__':
