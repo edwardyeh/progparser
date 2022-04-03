@@ -1,0 +1,40 @@
+# 1. Support single line and line-end comment in text-style table.
+# 2. Define order of tag/register/blank descriptors will be recorded for ini-style reg dump.
+# 3. Auto reserved reg insert in text to excel table convert if address jump occured. 
+
+# Reg descriptor format: <reg_name> <addr> <msb> <lsb> <sign> <access> <init_val> "<reg_description>"
+
+T: Group1           # Tag descriptor format:  T: <tag>
+
+group1_var1_1           0x0     0   0   u   y   0x0     "enable reg1"
+group1_var1_2           0x0     1   1   u   y   0x1     "enable reg2"
+group1_var2_1           0x4     15  0   u   y   0x64    "bus reg1"
+group1_var2_2           0x4     31  16  u   y   0xc8    "bus reg2"
+
+T: Group2           # Auto blank line insert between group and group in ini-style reg dump.
+
+group2_addr_var1        0x8     31  0   u   y   0xa8a8aa88
+
+===                 # Manual blank line insert by blank descriptor (3 equals) in ini-style reg dump.
+
+group2_var2_unsigned    0x14    15  0   u   y   30      # Initial value in text-style table can be hex or dec.
+group2_var2_signed      0x14    31  16  s   y   0xffec  # s: signed register, u: unsigned register
+
+# Reg value ignored in reg parsing if set non-accessible (y: accessible, n: non-accessible).
+# Non-accessible register will dump initial value in excel/hex reg dump.
+# Non-accessible register will be ignored in ini reg dump.
+
+group2_var3_hide1       0x18    15  0   u   n   0x0
+group2_var3_hide2       0x18    31  16  u   n   0x0
+
+### Use hex out descriptor to dump hex-type value in ini-style reg dump process ###
+
+H: group2_addr_var1     # hex out descriptor format:  H: <reg_name>
+
+### Use title descriptor to define address title (only for text to excel table convert) ###
+
+A: 0x0      "Group1 Register1"      # Title descriptor format:  A: <addr> <addr title>
+A: 0x4      "Group1 Register2"
+A: 0x8      "Group2 Register1"
+A: 0x14     "Group2 Register2"
+A: 0x18     "Group2 Register3"
