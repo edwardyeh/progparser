@@ -17,200 +17,231 @@
 ##   2021/12/18 Edward Yeh : Initial version.
 ## ============================================================================
 
-import os, copy, shutil, sys
-import argparse, textwrap
+import os
+import sys
+import copy
+import shutil
+import argparse
+import textwrap
+from typing import NamedTuple
+from dataclasses import dataclass
+
 import openpyxl
 
 ### Class Definition ###
 
-class TableError(Exception):
-    pass
+class Reg(NamedTuple):
+##{{{
+    name: str
+    addr: int
+    msb: int
+    lsb: int
+    is_access: bool
+    init_val: int
+    comment: str
+    row_idx: int
+##}}}
 
-class PatternError(Exception):
-    pass
+@dataclass
+class RegList:
+#{{{
+    title: str
+    regs: list
+#}}}
+
+@dataclass
+class INIGroup:
+#{{{ 
+    tag: str
+    max_len: int
+    regs: list
+#}}}
+
+class Pat(NamedTuple):
+##{{{
+    name: str
+    regs: dict
+##}}}
 
 class PatternList:
     """Programming pattern list"""
 
-    def __init__(self, ref_fp: str, table_type: str, is_debug: bool):
+    def __init__(self, table_fp: str, table_type: str, is_debug: bool):
     #{{{
         # reg_table = {addr1: reg_list1, addr2: reg_list2, ...}
-        # reg_list = [tag, title, max_len, reg1, reg2, ...]
-        # reg = [name, is_access, msb, lsb, init_val, comment, row_idx]
-        # pat_list = [[pat_name1, pat_table1], [pat_name2, pat_table2], ...]
-        # pat_table = {addr1: val_list1, addr2: val_list2, ...}
-        # val_list = [val1, val2, ...]
+        # ini_table = [INIGroup1, INIGroup2, ...]
+        # pat_list = [pat1, pat2, ...]
 
         self.is_debug = is_debug
         self.comment_sign = '#'
-        self.insert_ofs = 0x80000000
         self.reg_table = {}
+        self.ini_table = []
         self.pat_list  = []
 
         if table_type == 'txt':
-            self.txt_table_parser(ref_fp)
+            self.txt_table_parser(table_fp)
         elif table_type == 'xls':
-            self.xls_table_parser(ref_fp)
+            self.xls_table_parser(table_fp)
         else:
-            raise TypeError(f"Unsupport register table type ({table_type})")
+            raise ValueError(f"Unsupported register table type ({table_type})")
     #}}}
 
-    def txt_table_parser(self, ref_fp: str):
-        """Parse text style reference table"""  #{{{
-        # insert_table = [insert_list1, insert_list2, ...]
-        # insert_list = [tag, (addr, ), max_len, reg1, reg2, ...]
-
-        insert_table = []
-        is_insert = False
-        insert_addr = self.insert_ofs
-
-        reg_list = [None, None, 0] 
-        reg_act = False
-        reg_addr = 0
-
-        with open(ref_fp, 'r') as f:
+    def txt_table_parser(self, table_fp: str):
+        """Parse text style register table"""  #{{{
+        with open(table_fp, 'r') as f:
             line = f.readline()
             line_no = 1
+
             while line:
                 toks = line.split()
+
                 if len(toks):
-                    if toks[0] == 'T:' or toks[0] == 'I:' or toks[0] == 'A:':
-                        if reg_act:
-                            if is_insert:
-                                self.reg_table[insert_addr] = reg_list
-                                insert_table.append(reg_list)
-                                is_insert = False
-                                insert_addr += 4
-                            else:
-                                self.reg_table[reg_addr] = reg_list
-                            reg_list = [None, None, 0] 
+                    if toks[0] == 'T:':
+                        try:
+                            tag_name = ' '.join(toks[1:]).strip("\"\'")
+                            self.ini_table.append(INIGroup(tag_name, 0, []))
+                        except Exception as e:
+                            print("-" * 60)
+                            print("TableParseError: (line: {})".format(line_no))
+                            print("syntax of group descriptor:")
+                            print("  'T: <tag_name>'")
+                            print("-" * 60)
+                            raise e
 
-                        if toks[0] == 'T:':
-                            reg_list[0] = self.get_tag(toks[1], f"line: {line_no}")  # tag
-                            reg_act = False
-                        elif toks[0] == 'I:':
-                            reg_addr = self.get_int(toks[1], f"line: {line_no}")
-                            reg_list[1] = (reg_addr, )
-                            reg_act = True
-                            is_insert = True
-                        else:
-                            reg_addr = self.get_int(toks[1], f"line: {line_no}")
-                            if len(toks) > 2:
-                                reg_list[1] = ' '.join(toks[2:]).strip("\"\'")  # title
-                            reg_act = True
+                    elif toks[0] == 'A:':
+                        try:
+                            addr = self.str2int(toks[1])
+                            reg_list = self.reg_table.setdefault(addr, RegList(None, []))
+                            reg_list.title = ' '.join(toks[2:]).strip("\"\'") if len(toks) > 2 else None
+                        except Exception as e:
+                            print("-" * 60)
+                            print("TableParseError: (line: {})".format(line_no))
+                            print("syntax of address descriptor:")
+                            print("  'A: <addr> <title>'")
+                            print("-" * 60)
+                            raise e
+
                     else:
-                        reg = [toks[0].upper(),                               # name
-                               self.get_access(toks[1], f"line: {line_no}"),  # is_access
-                               self.get_int(toks[2], f"line: {line_no}"),     # msb
-                               self.get_int(toks[3], f"line: {line_no}"),     # lsb
-                               self.get_int(toks[4], f"line: {line_no}")]     # init_val
+                        try:
+                            reg_name = toks[0].upper()
+                            addr = self.str2int(toks[1])
+                            msb = self.str2int(toks[2])
+                            lsb = self.str2int(toks[3])
+                            is_access = self.access_check(toks[4])
+                            init_val = self.str2int(toks[5])
+                            comment = ' '.join(toks[6:]).strip("\"\'") if len(toks) > 6 else None
+                        except Exception as e:
+                            print("-" * 70)
+                            print("TableParseError: (line: {})".format(line_no))
+                            print("syntax of register descriptor:")
+                            print("  '<name> <addr> <msb> <lsb> <is_access> <init_val> [comment]'")
+                            print("-" * 70)
+                            raise e
 
-                        if is_insert:
-                            reg[1] = reg[1] + 'i'
+                        reg = Reg(reg_name, addr, msb, lsb, is_access, init_val, comment, None)
+                        reg_list = self.reg_table.setdefault(addr, RegList(None, []))
+                        reg_list.regs.append(reg)
 
-                        if len(toks) > 5:
-                            reg.append(' '.join(toks[5:]).strip("\"\'"))  # comment
+                        if len(self.ini_table):
+                            ini_grp = self.ini_table[-1]
                         else:
-                            reg.append(None)
+                            ini_grp = INIGroup(None, 0, [])
+                            self.ini_table.append(ini_grp)
 
-                        reg.append(None)  # row_idx is no use in this mode
+                        reg_len = len(reg_name)
+                        if reg_len > ini_grp.max_len:
+                            ini_grp.max_len = reg_len
 
-                        name_len = len(reg[0])
-                        if name_len > reg_list[2]:
-                            reg_list[2] = name_len  # max_len
-                        reg_list.append(reg)
+                        ini_grp.regs.append(reg)
+
                 line = f.readline()
                 line_no += 1
 
-            if reg_act:
-                if is_insert:
-                    self.reg_table[insert_addr] = reg_list
-                    insert_table.append(reg_list)
-                else:
-                    self.reg_table[reg_addr] = reg_list
-
-            for insert_list in insert_table:
-                if not insert_list[1][0] in self.reg_table:
-                    raise TableError("address of insert register is unexisted in register table")
-                reg_list = self.reg_table[insert_list[1][0]]
-                for reg in insert_list[3:]:
-                    reg_list.append(reg)
-
         if self.is_debug:
-            print("=== REG INSERTION TABLE ===")
-            for reg_list in insert_table:
-                print(reg_list)
-            print()
             self.show_reg_table("=== REG TABLE PARSER ===")
+            self.show_ini_table("=== INI TABLE PARSER ===")
     #}}}
 
-    def xls_table_parser(self, ref_fp: str):
+    def xls_table_parser(self, table_fp: str):
         """Parse excel style reference table"""  #{{{
-        reg_list = [None, None, 0] 
-        reg_act = False
-        reg_addr = 0
-
-        wb = openpyxl.load_workbook(ref_fp, data_only=True)
+        wb = openpyxl.load_workbook(table_fp, data_only=True)
         ws = wb.worksheets[0]
-
         addr_col = tuple(ws.iter_cols(1, 1, None, None, True))[0]
+
         for i in range(addr_col.index('ADDR')+1, len(addr_col)):
             row_idx = i + 1
 
             if addr_col[i] is not None:
-                if reg_act:
-                    self.reg_table[reg_addr] = reg_list
-
                 addr = str(addr_col[i])
+
                 if addr == 'none':
                     break
                 else:
-                    reg_addr = self.get_int(addr, f"row: {row_idx}")
-                    reg_list = [None, None, 0]
+                    try:
+                        addr = self.str2int(addr)
+                    except Exception as e:
+                        print("-" * 60)
+                        print("ExcelParseError: (row: {})".format(row_idx))
+                        print("address syntax error.")
+                        print("-" * 60)
+                        raise e
+
+                    if addr in self.reg_table:
+                        print("-" * 60)
+                        print("ExcelParseError: (row: {})".format(row_idx))
+                        print("the addess is existed in the table.")
+                        print("-" * 60)
+                        raise SyntaxError
+
                     title = ws.cell(row_idx, 2).value
                     if title is not None:
-                        reg_list[1] = str(title).strip()  # title
+                        title = str(title).strip()
+                    reg_list = RegList(title, [])
+                    self.reg_table[addr] = reg_list
 
-            reg_val = self.get_int(str(ws.cell(row_idx, 3).value), f"row: {row_idx}")
+            try:
+                init_val = self.str2int(str(ws.cell(row_idx, 3).value))
 
-            bits = str(ws.cell(row_idx, 4).value).split('_')
-            if len(bits) > 1:
-                msb = self.get_int(bits[0], f"row: {row_idx}")
-                lsb = self.get_int(bits[1], f"row: {row_idx}")
+                bits = str(ws.cell(row_idx, 4).value).split('_')
+                msb = self.str2int(bits[0])
+                lsb = self.str2int(bits[1]) if len(bits) > 1 else msb
+
+                toks = str(ws.cell(row_idx, 5).value).split('\n');
+                reg_name = toks[0].strip().upper()
+                comment = None if len(toks) == 1 else ', '.join([tok.strip() for tok in toks[1:]])
+            except Exception as e:
+                print("-" * 60)
+                print("ExcelParseError: (row: {})".format(row_idx))
+                print("register syntax error (INI/Bits/Member).")
+                print("-" * 60)
+                raise e
+
+            is_access = not ws.cell(row_idx, 5).font.__getattr__('color')
+            reg = Reg(reg_name, addr, msb, lsb, is_access, init_val, comment, row_idx)
+            reg_list.regs.append(reg)
+
+            if len(self.ini_table):
+                ini_grp = self.ini_table[-1]
             else:
-                msb = lsb = self.get_int(bits[0], f"row: {row_idx}")
+                ini_grp = INIGroup(None, 0, [])
+                self.ini_table.append(ini_grp)
 
-            toks = str(ws.cell(row_idx, 5).value).split('\n');
-            reg_name = toks[0].strip().upper()
-
-            if len(toks) == 1:
-                comment = None
-            else:
-                for i in range(1, len(toks)):
-                    toks[i] = toks[i].strip()
-                comment = ', '.join(toks[1:])
-
-            if ws.cell(row_idx, 5).font.__getattr__('color'):
-                is_access = 'n'
-            else:
-                is_access = 'y'
-
-            name_len = len(reg_name)
-            if name_len > reg_list[2]:
-                reg_list[2] = name_len  # max_len
-
-            reg_list.append([reg_name, is_access, msb, lsb, reg_val, comment, row_idx])
-            reg_act = True
+            reg_len = len(reg_name)
+            if reg_len > ini_grp.max_len:
+                ini_grp.max_len = reg_len
+            ini_grp.regs.append(reg)
 
         wb.close()
 
         if self.is_debug:
             self.show_reg_table("=== XLS TABLE PARSER ===")
+            self.show_ini_table("=== INI TABLE PARSER ===")
     #}}}
 
     def ini_parser(self, ini_fp: str, is_batch=False, start=0, end=0):
         """Pattern parser for INI format"""  #{{{
         cfg_fps = []
+
         if is_batch:
             with open(ini_fp, 'r') as f:
                 tmp_fps = f.readlines()
@@ -231,10 +262,12 @@ class PatternList:
             cfg_fps.append(ini_fp)
 
         for cfg_fp in cfg_fps:
-            cfg = {}
+            pat_regs = {}
+
             with open(cfg_fp, 'r') as f:
                 line = f.readline()
                 line_no = 1
+
                 while line:
                     if line.startswith('['):
                         pass
@@ -242,38 +275,36 @@ class PatternList:
                         pass
                     else:
                         toks = line.split()
-                        if len(toks) and toks[1] == '=':
-                            cfg[toks[0].upper()] = self.get_int_pat(toks[2], f"line: {line_no}")
+
+                        try:
+                            if len(toks) and toks[1] == '=':
+                                pat_regs[toks[0].upper()] = self.str2int(toks[2])
+                        except Exception as e:
+                            print("-" * 60)
+                            print("INIRegParseError: (line: {})".format(line_no))
+                            print("syntax of register descriptor:")
+                            print("  '<reg_name> = <value> [comment]'")
+                            print("-" * 60)
+                            raise e
+
                     line = f.readline()
                     line_no += 1
 
             if self.is_debug:
                 print(f"=== INI READ ({cfg_fp}) ===")
-                for item in cfg.items():
+                for item in pat_regs.items():
                     print(item)
                 print()
 
-            pat_table = {}
-            for addr, reg_list in self.reg_table.items():
-                val_list = []
-                for reg in reg_list[3:]:
-                    if reg[1] == 'n':
-                        val_list.append(reg[4])
-                    else:
-                        val_list.append(cfg.get(reg[0], reg[4])) 
-                pat_table[addr] = val_list
-
-            if self.is_debug:
-                self.show_pat_content(pat_table, f"=== PAT CONTENT ({cfg_fp}) ===")
-
             pat_name = os.path.basename(cfg_fp)
             pat_name = os.path.splitext(pat_name)[0]
-            self.pat_list.append([pat_name, pat_table])
+            self.pat_list.append(Pat(pat_name, pat_regs))
     #}}}
 
     def hex_parser(self, hex_fp: str, is_batch=False, start=0, end=0):
         """Pattern parser for HEX format"""  #{{{
         cfg_fps = []
+
         if is_batch:
             with open(hex_fp, 'r') as f:
                 tmp_fps = f.readlines()
@@ -294,43 +325,33 @@ class PatternList:
             cfg_fps.append(hex_fp)
 
         for cfg_fp in cfg_fps:
-            cfg = {}
+            pat_regs = {}
+
             with open(cfg_fp, 'r') as f:
                 line = f.readline()
+
                 while line:
                     addr = int(line[0:4], 16)
                     val = int(line[4:12], 16)
-                    cfg[addr] = val
+
+                    if addr in self.reg_table:
+                        table_regs = self.reg_table[addr].regs
+
+                        for reg in table_regs:
+                            mask = (1 << (reg.msb - reg.lsb + 1)) - 1
+                            pat_regs[reg.name] = (val >> reg.lsb) & mask
+
                     line = f.readline()
 
             if self.is_debug:
                 print(f"=== HEX READ ({cfg_fp}) ===")
-                for key, val in cfg.items():
-                    print(f"{key:#06x}: {val:#010x}")
+                for item in pat_regs.items():
+                    print(item)
                 print()
-
-            pat_table = {}
-            for addr, reg_list in self.reg_table.items():
-                val_list = []
-                if addr in cfg:
-                    for reg in reg_list[3:]:
-                        if reg[1] == 'n':
-                            val_list.append(reg[4])
-                        else:
-                            mask = (1 << (reg[2] - reg[3] + 1)) - 1
-                            reg_val = (cfg[addr] >> reg[3]) & mask
-                            val_list.append(reg_val)
-                else:
-                    for reg in reg_list[3:]:
-                        val_list.append(reg[4])
-                pat_table[addr] = val_list
-
-            if self.is_debug:
-                self.show_pat_content(pat_table, f"=== PAT CONTENT ({cfg_fp}) ===")
 
             pat_name = os.path.basename(cfg_fp)
             pat_name = os.path.splitext(pat_name)[0]
-            self.pat_list.append([pat_name, pat_table])
+            self.pat_list.append(Pat(pat_name, pat_regs))
     #}}}
 
     def xls_parser(self, xls_fp: str, is_batch=False, start=0, end=0):
@@ -363,34 +384,27 @@ class PatternList:
         for j in range(start, end+1):
             val_col = tuple(ws.iter_cols(j, j, None, None, True))[0]
             pat_name = str(val_col[1])
-            cfg = {}
+            pat_regs = {}
+
             for i in range(row_st, row_ed):
                 reg_name = name_col[i].split('\n')[0]
+
                 if reg_name.upper() != 'RESERVED':
-                    val = self.get_int_pat(str(val_col[i]), f"row: {i+1}")
-                    cfg[reg_name] = val
+                    try:
+                        pat_regs[reg_name] = int(str(val_col[i]), 16)
+                    except Exception as e:
+                        print("-" * 60)
+                        print("ExcelRegParseError: (row: {})".format(i+1))
+                        print("-" * 60)
+                        raise e
 
             if self.is_debug:
                 print(f"=== XLS READ ({pat_name}) ===")
-                for item in cfg.items():
+                for item in pat_regs.items():
                     print(item)
                 print()
 
-            pat_table = {}
-            for addr, reg_list in self.reg_table.items():
-                val_list = []
-                for reg in reg_list[3:]:
-                    if reg[1] == 'n':
-                        val_list.append(reg[4])
-                    else:
-                        val_list.append(cfg.get(reg[0], reg[4]))
-                pat_table[addr] = val_list
-
-            if self.is_debug:
-                self.show_pat_content(pat_table, f"=== PAT CONTENT ({pat_name}) ===")
-                exit(0)
-
-            self.pat_list.append([pat_name, pat_table])
+            self.pat_list.append(Pat(pat_name, pat_regs))
 
         wb.close()
     #}}}
@@ -401,57 +415,61 @@ class PatternList:
             if pat_out_fp is not None:
                 pat_fp = pat_out_fp
             else:
-                pat_fp = os.path.join('progp_out', pat[0]+'.ini')
+                pat_fp = os.path.join('progp_out', pat.name + '.ini')
 
-            is_first = True
-            is_insert = False
             with open(pat_fp, 'w') as f:
-                for addr, reg_list in self.reg_table.items():
-                    if reg_list[0] is not None:
-                        if not is_first:
-                            f.write('\n')
-                        f.write(f'{reg_list[0]}\n')
-                        is_first = False
+                is_first_tag = True
 
-                    if type(reg_list[1]) is tuple:
-                        is_insert = True
-                    else:
-                        is_insert = False
-
-                    for val, reg in zip(pat[1][addr], reg_list[3:]):
-                        if len(reg[1]) == 2 and not is_insert:
-                            pass
+                for ini_grp in self.ini_table:
+                    if ini_grp.tag is not None:
+                        if is_first_tag:
+                            is_first_tag = False
                         else:
-                            if reg[1][0] == 'y':
-                                f.write(f"{reg[0].lower()} = {val}")
-                                if reg[5] is not None:
-                                    f.write(f'  # {reg[5]}\n')
-                                else:
-                                    f.write("\n")
-                                is_first = False
+                            f.write("\n")
+
+                        f.write(f"[{ini_grp.tag}]\n")
+
+                    for reg in ini_grp.regs:
+                        if reg.is_access:
+                            mask = (1 << (reg.msb - reg.lsb + 1)) - 1
+                            value = pat.regs[reg.name] if reg.name in pat.regs else reg.init_val
+                            value = value & mask
+
+                            f.write(f"{reg.name.lower()}")
+
+                            if reg.name.find("ADDR") == -1:
+                                f.write(f" = {value}")
+                            else:
+                                f.write(f" = {value:<#010x}")
+
+                            if reg.comment is not None:
+                                f.write(f"  # {reg.comment}\n")
+                            else:
+                                f.write("\n")
     #}}}
 
     def hex_dump(self, pat_out_fp=None):
-        """Dump pattern with hex format""" #{{{
+        """Dump pattern with hex format"""  #{{{
         for pat in self.pat_list:
             if pat_out_fp is not None:
                 pat_fp = pat_out_fp
             else:
-                pat_fp = os.path.join('progp_out', pat[0]+'.pat')
+                pat_fp = os.path.join('progp_out', pat.name + '.pat')
 
             with open(pat_fp, 'w') as f:
-                addr_list = sorted(tuple(pat[1].keys()))
-                end_addr = addr_list[-1];
-                for i, addr in enumerate(addr_list):
-                    if addr == self.insert_ofs:
-                        end_addr = addr_list[i-1] if i > 0 else addr_list[i]
-                        break
+                addr_list = sorted(tuple(self.reg_table.keys()))
 
-                for addr in range(0, end_addr+4, 4):
+                for addr in addr_list:
                     word_val = 0
-                    if addr in pat[1]:
-                        for val, reg in zip(pat[1][addr], self.reg_table[addr][3:]):
-                            word_val += val << reg[3]
+
+                    for reg in self.reg_table[addr].regs:
+                        mask = (1 << (reg.msb - reg.lsb + 1)) - 1
+
+                        if reg.is_access and reg.name in pat.regs:
+                            word_val += (pat.regs[reg.name] & mask) << reg.lsb
+                        else:
+                            word_val += (reg.init_val & mask) << reg.lsb
+
                     f.write("{:04x}{:08x}\n".format(addr, word_val))
     #}}}
 
@@ -481,10 +499,14 @@ class PatternList:
                 cell.alignment = copy.copy(row.alignment)
 
         for pat in self.pat_list:
-            for addr, reg_list in self.reg_table.items():
-                for val, reg in zip(pat[1][addr], reg_list[3:]):
-                    row = ws.row_dimensions[reg[6]]
-                    cell = ws.cell(reg[6], pat_idx, hex(val).upper()[2:])
+            for reg_list in self.reg_table.values():
+                for reg in reg_list.regs:
+                    value = pat.regs[reg.name] if reg.name in pat.regs else reg.init_val
+                    if not reg.is_access:
+                        value = 0
+
+                    row = ws.row_dimensions[reg.row_idx]
+                    cell = ws.cell(reg.row_idx, pat_idx, hex(value).upper()[2:])
                     cell.font = copy.copy(row.font)
                     cell.fill = copy.copy(row.fill)
                     cell.border = copy.copy(row.border)
@@ -498,7 +520,7 @@ class PatternList:
             cell.alignment = copy.copy(row.alignment)
 
             row = ws.row_dimensions[2]
-            cell = ws.cell(2, pat_idx, pat[0])
+            cell = ws.cell(2, pat_idx, pat.name)
             cell.font = copy.copy(row.font)
             cell.fill = copy.copy(row.fill)
             cell.border = copy.copy(row.border)
@@ -514,74 +536,56 @@ class PatternList:
         wb.close()
     #}}}
 
-    def get_int(self, str_: str, msg=None) -> int:
+    def str2int(self, str_: str) -> int:
         """Convert string to integer (with HEX check)"""  #{{{
-        try:
-            if str_.startswith('0x') or str_.startswith('0X') :
-                return int(str_, 16)
-            else:
-                return int(str_)
-        except ValueError as e:
-            if msg is None:
-                raise TableError(e)
-            else:
-                raise TableError(f"{e} ({msg})")
-    #}}}
-
-    def get_tag(self, str_: str, msg=None) -> str:
-        """Syntax check for tag"""  #{{{
-        if not str_.startswith('[') or not str_.endswith(']'):
-            if msg is None:
-                raise TableError("tag must be included in square brackets")
-            else:
-                raise TableError(f"tag must be included in square brackets ({msg})")
+        if str_.startswith('0x') or str_.startswith('0X') :
+            return int(str_, 16)
         else:
-            return str_
+            return int(str_)
     #}}}
 
-    def get_access(self, str_: str, msg=None) -> str:
+    def access_check(self, str_: str) -> bool:
         """Syntax check for access flag"""  #{{{
         str_ = str_.lower()
-        if str_ != 'y' and str_ != 'n':
-            if msg is None:
-                raise TableError(f"access flga must be 'y' or 'n'")
-            else:
-                raise TableError(f"access flga must be 'y' or 'n' ({msg})")
+
+        if str_ == 'y':
+            return True
+        elif str_ == 'n':
+            return False
         else:
-            return str_
+            raise SyntaxError("access flga must be 'y' or 'n'")
     #}}}
 
-    def show_reg_table(self, comment : str):
+    def show_reg_table(self, msg: str):
         """Show register table"""  #{{{
-        print(comment)
+        print(msg)
+        reg_cnt = 0
+
         for addr, reg_list in self.reg_table.items():
-            print("{}".format([hex(addr)] + reg_list[0:3]))
-            for reg in reg_list[3:]:
-                print(f"  {reg}")
-        print()
+            print(f"Addr: {addr:#06x} Title: {reg_list.title}")
+            for reg in reg_list.regs:
+                print("  Reg:      {}, {}, {}, {}, {}".format(
+                    reg.name, reg.msb, reg.lsb, reg.is_access, reg.init_val))
+                print("  Comment:  {}".format(reg.comment))
+                print("  RowIndex: {}\n".format(reg.row_idx))
+                reg_cnt += 1
+
+        print(f"register count: {reg_cnt}\n")
     #}}}
 
-    def get_int_pat(self, str_: str, msg=None) -> int:
-        """Convert string to integer (with HEX check)"""  #{{{
-        try:
-            if str_.startswith('0x') or str_.startswith('0X') :
-                return int(str_, 16)
-            else:
-                return int(str_)
-        except ValueError as e:
-            if msg is None:
-                raise PatternError(e)
-            else:
-                raise PatternError(f"{e} ({msg})")
-    #}}}
+    def show_ini_table(self, msg: str):
+        """Show ini table"""  #{{{
+        print(msg)
+        reg_cnt = 0
 
-    def show_pat_content(self, pat : dict, comment : str):
-        """Show pattern content""" #{{{
-        print(comment)
-        for addr, val_list in pat.items():
-            print("addr: {}".format(hex(addr)))
-            print("{}".format(val_list))
-        print()
+        for ini_grp in self.ini_table:
+            print(f"Tag: {ini_grp.tag}")
+            for reg in ini_grp.regs:
+                blank = ' ' * (ini_grp.max_len - len(reg.name))
+                print(f"  {reg.name}{blank} = {reg.init_val}")
+                reg_cnt += 1
+
+        print(f"\nregister count: {reg_cnt}\n")
     #}}}
 
 ### Main Function ###
@@ -733,5 +737,4 @@ def main(is_debug=False):
 
 if __name__ == '__main__':
     main(False)
-else:
-    pass
+

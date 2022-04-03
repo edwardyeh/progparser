@@ -1,86 +1,81 @@
-T: [Global]
+T: Global
 
 A: 0x00     "Go Engine Register"
-age_go                  n   0   0   0x0     "Engine start trigger"
-sw_rst_like2axi         n   27  27  0x0
-sw_rst_axi_128_arbit    n   29  29  0x0
-sw_rst_setting          n   30  30  0x0
-sw_rst                  n   31  31  0x0
+age_go                  0x00    0   0   n   0x0     "Engine start trigger"
+sw_rst_like2axi         0x00    27  27  n   0x0
+sw_rst_axi_128_arbit    0x00    29  29  n   0x0
+sw_rst_setting          0x00    30  30  n   0x0
+sw_rst                  0x00    31  31  n   0x0
                                 
 A: 0x04     "Busy Engine Register"                         
-engine_busy_status      n   31  0   0x0
+engine_busy_status      0x04    31  0   n   0x0
                                 
 A: 0x08     "Cycle_Counter_Register"
-age_cycle_counter       y   31  0   200     "cycle count"
+age_cycle_counter       0x08    31  0   y   200     "cycle count"
 
 A: 0x0c     "reserved"
-reserved                n   31  0   0x0
+reserved                0x0c    31  0   n   0x0
 
 A: 0x40     "IP Version"
-ip_version              n   31  0   0x0
+ip_version              0x40    31  0   n   0x0
 
-T: [Status]
+T: Status
 
-I: 0x24
-reg_set1_var4           y   24  16  0x1
+reg_set1_var4           0x24    24  16  y   0x1
+reg_set2_var1           0x28    15  8   y   0x2
+reg_set2_var3           0x28    31  24  n   0x3
+reg_set3_var1           0x30    31  0   y   0x0
+reg_set1_var2           0x24    7   4   y   0x4
 
-I: 0x28
-reg_set2_var1           y   15  8   0x2
-reg_set2_var3           n   31  24  0x3
-
-A: 0x30
-reg_set3_var1           y   31  0   0x0
-
-I: 0x24
-reg_set1_var2           y   7   4   0x4
-
-T: [SRC1]
+T: SRC1
                                 
 A: 0x18     "SRC1_Control0_Register"                         
-src1_ch0_en                 y   0   0   0x0
-src1_ch1_en                 y   1   1   0x0
-src1_ch2_en                 y   2   2   0x0
-src1_ch1_boda_mode          y   5   4   0x0     "0: 444, 1: 422, 2: 440, 3: 420"
-src1_sram_size_ch0_in32x64  y   9   8   0x0     "0: 0x64, 1: 32x64, 2: 64x64, 3: 96x64"
-src1_sram_base_ch1_in32x64  y   13  12  0x0
-src1_sram_size_ch1_in32x64  y   17  16  0x0
-src1_sram_base_ch2_in32x64  y   21  20  0x0
-src1_sram_size_ch2_in32x64  y   25  24  0x0
-src1_pixel_width_ch0        y   29  28  0x0     "0: 8, 1: 16, 2: 24, 3: 32"
-src1_pixel_width_1248_ch0   y   31  30  0x0     "0: bypass, 1: 4bit, 2: 2bit"
+src1_ch0_en                 0x18    0   0   y   0x0
+src1_ch1_en                 0x18    1   1   y   0x0
+src1_ch2_en                 0x18    2   2   y   0x0
+src1_ch1_boda_mode          0x18    5   4   y   0x0     "0: 444, 1: 422, 2: 440, 3: 420"
+src1_sram_size_ch0_in32x64  0x18    9   8   y   0x0     "0: 0x64, 1: 32x64, 2: 64x64, 3: 96x64"
+src1_sram_base_ch1_in32x64  0x18    13  12  y   0x0
+src1_sram_size_ch1_in32x64  0x18    17  16  y   0x0
+src1_sram_base_ch2_in32x64  0x18    21  20  y   0x0
+src1_sram_size_ch2_in32x64  0x18    25  24  y   0x0
+src1_pixel_width_ch0        0x18    29  28  y   0x0     "0: 8, 1: 16, 2: 24, 3: 32"
+src1_pixel_width_1248_ch0   0x18    31  30  y   0x0     "0: bypass, 1: 4bit, 2: 2bit"
 
 A: 0x1c     "SRC1_Control1_Register"                         
-src1_pixel_width_ch1    y   1   0   0x0     "0: 8, 1: 16"  
-src1_pixel_width_ch2    y   5   4   0x0
-src1_yuyv_en            y   6   6   0x0     "Only for CH0"
-src_yuyv_mode           y   7   7   0x0     "[LSB->MSB] 0: YUYV, 1: UYVY"
-src1_l_shift_ch1        y   9   8   0x0
-src1_l_shift_ch2        y   11  10  0x0
-src1_c0_width           y   18  16  0x0
-src1_c1_width           y   22  20  0x0
-src1_c2_width           y   26  24  0x0
-src1_c3_width           y   30  28  0x0
+src1_pixel_width_ch1    0x1c	1   0   y   0x0     "0: 8, 1: 16"  
+src1_pixel_width_ch2    0x1c	5   4   y   0x0
+src1_yuyv_en            0x1c	6   6   y   0x0     "Only for CH0"
+src_yuyv_mode           0x1c	7   7   y   0x0     "[LSB->MSB] 0: YUYV, 1: UYVY"
+src1_l_shift_ch1        0x1c	9   8   y   0x0
+src1_l_shift_ch2        0x1c	11  10  y   0x0
+src1_c0_width           0x1c	18  16  y   0x0
+src1_c1_width           0x1c	22  20  y   0x0
+src1_c2_width           0x1c	26  24  y   0x0
+src1_c3_width           0x1c	30  28  y   0x0
 
 A: 0x20     "SRC1_Control2_Register"                         
-src1_c0_upsample_mode           y   1   0   0x0     "0: 0, 1: 1, 2: LSB, 3: MSB smooth"
-src1_c1_upsample_mode           y   3   2   0x0
-src1_c2_upsample_mode           y   5   4   0x0
-src1_c3_upsample_mode           y   7   6   0x0
-src1_alpha_pick                 y   9   8   0x0     "0: AXXX, 1: XAXX, 2: XXAX, 3: XXXA"
-src1_a4x4_upsample_mode         y   11  10  0x0     "0: A8, 1: {A4, 4'h0}, 2: {A4, 4'h4}, 3: {A4, 4bit A4[0]}"
-src1_alpha_inverse              y   12  12  0x0
-src1_const_alpha_en             y   13  13  0x0
-src1_alpha_1bit_en              y   14  14  0x0
-src1_fix_color_0_by_alpha_en    y   15  15  0x0
-src1_const_alpha                y   23  16  0x0
-src1_const_alpha_0              y   31  24  0x0
+src1_c0_upsample_mode           0x20	1   0   y   0x0     "0: 0, 1: 1, 2: LSB, 3: MSB smooth"
+src1_c1_upsample_mode           0x20	3   2   y   0x0
+src1_c2_upsample_mode           0x20	5   4   y   0x0
+src1_c3_upsample_mode           0x20	7   6   y   0x0
+src1_alpha_pick                 0x20	9   8   y   0x0     "0: AXXX, 1: XAXX, 2: XXAX, 3: XXXA"
+src1_a4x4_upsample_mode         0x20	11  10  y   0x0     "0: A8, 1: {A4, 4'h0}, 2: {A4, 4'h4}, 3: {A4, 4bit A4[0]}"
+src1_alpha_inverse              0x20	12  12  y   0x0
+src1_const_alpha_en             0x20	13  13  y   0x0
+src1_alpha_1bit_en              0x20	14  14  y   0x0
+src1_fix_color_0_by_alpha_en    0x20	15  15  y   0x0
+src1_const_alpha                0x20	23  16  y   0x0
+src1_const_alpha_0              0x20	31  24  y   0x0
 
-T: [REG_SET1]
+T: REG_SET1
 
-A: 0x24
-reg_set1_var1   y   3   0   0x10
-reg_set1_var3   y   15  8   0x11
+reg_set1_var1   0x24	3   0   y   0x8 
+reg_set1_var3   0x24	15  8   y   0x11
+reg_set2_var2   0x28	23  16  y   0x12
+reg_set2_var0   0x28	7   0   y   0x13
 
-A: 0x28
-reg_set2_var2   y   23  16  0x12
-reg_set2_var0   y   7   0   0x13
+reg_addr2       0x34    31  0   y   0x5a5aa5a5
+
+
+
