@@ -90,6 +90,8 @@ class ReferenceTable:
                             if reg[0] == self.comment_sign:
                                 break
                             self.hex_out.add(reg.upper())
+                    elif toks[0] == '===':
+                        ini_grp.regs.append(Reg('===', *[None]*8))
                     else:
                         try:
                             reg_name = toks[0].upper()
@@ -231,6 +233,10 @@ class ReferenceTable:
                     max_len += 4
 
                 for reg in ini_grp.regs:
+                    if reg.name == '===':
+                        f.write("===\n")
+                        continue
+
                     init_val = reg.init_val & ((1 << (reg.msb - reg.lsb + 1)) - 1)
                     f.write("{}{:<#8x}{:<4}{:<4}{:<4}{:<4}{:<#12x}".format(
                         reg.name.lower().ljust(max_len),

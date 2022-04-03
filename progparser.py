@@ -233,6 +233,10 @@ class PatternList(ReferenceTable):
                         f.write(f"[{ini_grp.tag}]\n")
 
                     for reg in ini_grp.regs:
+                        if reg.name == '===':
+                            f.write("\n")
+                            continue
+
                         if reg.is_access:
                             try:
                                 if reg.name in pat.regs:
