@@ -459,9 +459,13 @@ def main(is_debug=False):
     table_gparser.add_argument('-X', dest='xlsx_table_fp2', metavar='<path>', type=str,
                                         help=textwrap.dedent("""\
                                         use excel-style reference table (new table create)"""))
-    table_gparser.add_argument('-d', dest='database_fp', metavar='<path>', type=str,
-                                        help=textwrap.dedent("""\
-                                        use pre-parsed reference table database (pickle type)"""))
+    # table_gparser.add_argument('-d', dest='database_fp', metavar='<path>', type=str,
+    #                                     help=textwrap.dedent("""\
+    #                                     use pre-parsed reference table database (pickle type)"""))
+
+    # parser.add_argument('-p', dest='pickle_out_fp', metavar='<path>', type=str,
+    #                             help=textwrap.dedent("""\
+    #                             export reference table database (pickle type)"""))
 
     parser.add_argument('-b', dest='is_batch', action='store_true', 
                                 help="enable batch mode")
@@ -480,10 +484,6 @@ def main(is_debug=False):
                                     specify output file path 
                                     (force overwrite, ignore when ini/hex out at batch mode)"""))
 
-    parser.add_argument('-p', dest='pickle_out_fp', metavar='<path>', type=str,
-                                help=textwrap.dedent("""\
-                                export reference table database (pickle type)"""))
-
     args = parser.parse_args()
 
     ## Parser register table
@@ -494,16 +494,16 @@ def main(is_debug=False):
         pat_list = PatternList(args.xlsx_table_fp, 'xlsx', is_debug)
     elif args.xlsx_table_fp2:
         pat_list = PatternList(args.xlsx_table_fp2, 'xlsx', is_debug)
-    else:
-        pat_list = PatternList(args.database_fp, 'db', is_debug)
+    # else:
+    #     pat_list = PatternList(args.database_fp, 'db', is_debug)
 
     is_init = True if args.xlsx_table_fp2 else False
 
     ## Only dump reference table database
 
-    if args.pickle_out_fp:
-        pat_list.export_table_db(args.pickle_out_fp)
-        return 0
+    # if args.pickle_out_fp:
+    #     pat_list.export_table_db(args.pickle_out_fp)
+    #     return 0
 
     ## Parse input pattern
 
