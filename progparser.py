@@ -213,13 +213,13 @@ class PatternList(ReferenceTable):
         wb.close()
     #}}}
 
-    def ini_dump(self, pat_out_fp=None):
+    def ini_dump(self, file_ext: str='.ini', pat_out_fp=None):
         """Dump pattern with ini format""" #{{{
         for pat in self.pat_list:
             if pat_out_fp is not None:
                 pat_fp = pat_out_fp
             else:
-                pat_fp = os.path.join('progp_out', pat.name + '.ini')
+                pat_fp = os.path.join('progp_out', pat.name + file_ext)
 
             with open(pat_fp, 'w') as f:
                 is_first_tag = True
@@ -269,13 +269,13 @@ class PatternList(ReferenceTable):
                                 f.write("\n")
     #}}}
 
-    def hex_dump(self, pat_out_fp=None):
+    def hex_dump(self, file_ext: str='.pat', pat_out_fp=None):
         """Dump pattern with hex format"""  #{{{
         for pat in self.pat_list:
             if pat_out_fp is not None:
                 pat_fp = pat_out_fp
             else:
-                pat_fp = os.path.join('progp_out', pat.name + '.pat')
+                pat_fp = os.path.join('progp_out', pat.name + file_ext)
 
             with open(pat_fp, 'w') as f:
                 for addr in range(0, max(self.reg_table.keys()) + 4, 4):
@@ -484,6 +484,9 @@ def main(is_debug=False):
                                     specify output file path 
                                     (force overwrite, ignore when ini/hex out at batch mode)"""))
 
+    parser.add_argument('--ext', dest='cus_ext', metavar='<ext>', type=str,
+                                    help="custom file extension (ini/hex dump only)")
+
     args = parser.parse_args()
 
     ## Parser register table
@@ -537,10 +540,15 @@ def main(is_debug=False):
                     print('Terminated')
                     exit(1)
 
+    try:
+        file_ext = '.' + args.cus_ext.split('.')[-1]
+    except Exception:
+        file_ext = '.ini' if args.out_fmt == 'ini' else '.pat'
+
     if args.out_fmt == 'ini':
-        pat_list.ini_dump(pat_out_fp)
+        pat_list.ini_dump(file_ext, pat_out_fp)
     elif args.out_fmt == 'hex':
-        pat_list.hex_dump(pat_out_fp)
+        pat_list.hex_dump(file_ext, pat_out_fp)
     else:
         if args.xlsx_table_fp:
             pat_list.xlsx_dump(args.xlsx_table_fp, pat_out_fp, is_init)
