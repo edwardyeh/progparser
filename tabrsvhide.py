@@ -1,24 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-## +FHDR=======================================================================
-## Copyright (c) 2022 Hsin-Hsien Yeh (Edward Yeh).
-## All rights reserved.
-## ----------------------------------------------------------------------------
-## Filename         : tabrsvhide.py
-## File Description : Hide reserved registers in the excel-style table
-## ----------------------------------------------------------------------------
-## Author           : Edward Yeh
-## Created On       : Fri 25 Mar 2022 01:02:54 AM CST
-## Format           : Python module
-## ----------------------------------------------------------------------------
-## Reuse Issues     : 
-## ----------------------------------------------------------------------------
-## Release History  : 
-## -FHDR=======================================================================
-
+"""
+Hide reserved registers in the excel-style table
+"""
 import argparse
 import textwrap
 import openpyxl
+import sys
 
 ### Function ###
 
@@ -52,4 +38,4 @@ def main():
 #}}}
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

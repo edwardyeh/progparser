@@ -1,64 +1,22 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-## ============================================================================
-## Copyright (c) 2021 Hsin-Hsien Yeh (Edward Yeh).
-## All rights reserved.
-## ----------------------------------------------------------------------------
-## Filename         : progparser.py
-## File Description : Programming Register Parser
-## ----------------------------------------------------------------------------
-## Author           : Edward Yeh
-## Created On       : Sat 18 Dec 2021 11:48:41 PM CST
-## Format           : Python module
-## ----------------------------------------------------------------------------
-## Reuse Issues     : 
-## ----------------------------------------------------------------------------
-## Release History  : 
-##   2021/12/18 Edward Yeh : Initial version.
-## ============================================================================
-
+"""
+Programming Register Parser
+"""
 import argparse
 import copy
-import math
+# import math
 import os
 import pickle
 import shutil
 import sys
 import textwrap
-from dataclasses import dataclass
 from typing import NamedTuple
 
 import openpyxl
 
+from .utils.general import str2int
+from .utils.ref_table import ReferenceTable
+
 ### Class Definition ###
-
-class Reg(NamedTuple):
-##{{{
-    name: str
-    addr: int
-    msb: int
-    lsb: int
-    is_signed: bool
-    is_access: bool
-    init_val: int
-    comment: str
-    row_idx: int
-##}}}
-
-@dataclass
-class RegList:
-#{{{
-    title: str
-    regs: list
-#}}}
-
-@dataclass
-class INIGroup:
-#{{{ 
-    tag: str
-    max_len: int
-    regs: list
-#}}}
 
 class Pat(NamedTuple):
 ##{{{
@@ -66,20 +24,14 @@ class Pat(NamedTuple):
     regs: dict
 ##}}}
 
-class PatternList:
+class PatternList(ReferenceTable):
     """Programming pattern list"""  #{{{
 
     def __init__(self, table_fp: str, table_type: str, is_debug: bool):
     #{{{
-        # reg_table = {addr1: reg_list1, addr2: reg_list2, ...}
-        # ini_table = [INIGroup1, INIGroup2, ...]
         # pat_list = [pat1, pat2, ...]
 
-        self.is_debug = is_debug
-        self.comment_sign = '#'
-        self.reg_table = {}
-        self.ini_table = []
-        self.hex_out = set()
+        super().__init__(is_debug)
         self.pat_list  = []
 
         if table_type == 'txt':
@@ -92,168 +44,6 @@ class PatternList:
                 self.ini_table = pickle.load(f)
         else:
             raise ValueError(f"Unsupported register table type ({table_type})")
-    #}}}
-
-    def txt_table_parser(self, table_fp: str):
-        """Parse text style register table"""  #{{{
-        with open(table_fp, 'r') as f:
-            line = f.readline()
-            line_no = 1
-            while line:
-                toks = line.split()
-                if len(toks):
-                    if toks[0][0] == self.comment_sign:
-                        pass
-                    elif toks[0] == 'T:':
-                        try:
-                            tag_name = ' '.join(toks[1:]).strip("\"\'")
-                            self.ini_table.append(INIGroup(tag_name, 0, []))
-                        except Exception as e:
-                            print("-" * 60)
-                            print("TableParseError: (line: {})".format(line_no))
-                            print("syntax of group descriptor:")
-                            print("  'T: <tag_name>'")
-                            print("-" * 60)
-                            raise e
-                    elif toks[0] == 'A:':
-                        try:
-                            addr = self.str2int(toks[1])
-                            reg_list = self.reg_table.setdefault(addr, RegList(None, []))
-                            reg_list.title = ' '.join(toks[2:]).strip("\"\'") if len(toks) > 2 else None
-                        except Exception as e:
-                            print("-" * 60)
-                            print("TableParseError: (line: {})".format(line_no))
-                            print("syntax of address descriptor:")
-                            print("  'A: <addr> <title>'")
-                            print("-" * 60)
-                            raise e
-                    elif toks[0] == 'H:':
-                        for reg in toks[1:]:
-                            if reg[0] == self.comment_sign:
-                                break
-                            self.hex_out.add(reg.upper())
-                    else:
-                        try:
-                            reg_name = toks[0].upper()
-                            addr = self.str2int(toks[1])
-                            msb = self.str2int(toks[2])
-                            lsb = self.str2int(toks[3])
-                            is_signed = self.sign_check(toks[4])
-                            is_access = self.access_check(toks[5])
-                            init_val = self.str2int(toks[6], is_signed, msb - lsb + 1)
-                            if len(toks) > 7:
-                                comment = ' '.join(toks[7:])
-                                comment = None if comment[0] == self.comment_sign else\
-                                            comment.split(self.comment_sign)[0].strip("\"\' ")
-                            else:
-                                comment = None
-                        except Exception as e:
-                            print("-" * 70)
-                            print("TableParseError: (line: {})".format(line_no))
-                            print("syntax of register descriptor:")
-                            print("  '<name> <addr> <msb> <lsb> <sign_type> <is_access> <init_val> [comment]'")
-                            print("-" * 70)
-                            raise e
-
-                        reg = Reg(reg_name, addr, msb, lsb, is_signed, is_access, init_val, comment, None)
-                        reg_list = self.reg_table.setdefault(addr, RegList(None, []))
-                        reg_list.regs.append(reg)
-
-                        if len(self.ini_table):
-                            ini_grp = self.ini_table[-1]
-                        else:
-                            ini_grp = INIGroup(None, 0, [])
-                            self.ini_table.append(ini_grp)
-
-                        reg_len = len(reg_name)
-                        if reg_len > ini_grp.max_len:
-                            ini_grp.max_len = reg_len
-                        ini_grp.regs.append(reg)
-
-                line = f.readline()
-                line_no += 1
-
-        if self.is_debug:
-            self.show_reg_table("=== REG TABLE PARSER ===")
-            self.show_ini_table("=== INI TABLE PARSER ===")
-    #}}}
-
-    def xls_table_parser(self, table_fp: str):
-        """Parse excel style reference table"""  #{{{
-        wb = openpyxl.load_workbook(table_fp, data_only=True)
-        ws = wb.worksheets[0]
-        addr_col = tuple(ws.iter_cols(1, 1, None, None, True))[0]
-        for i in range(addr_col.index('ADDR')+1, len(addr_col)):
-            row_idx = i + 1
-            if addr_col[i] is not None:
-                addr = str(addr_col[i])
-                if addr == 'none':
-                    break
-                else:
-                    try:
-                        addr = self.str2int(addr)
-                    except Exception as e:
-                        print("-" * 60)
-                        print("ExcelParseError: (row: {})".format(row_idx))
-                        print("address syntax error.")
-                        print("-" * 60)
-                        raise e
-
-                    if addr in self.reg_table:
-                        print("-" * 60)
-                        print("ExcelParseError: (row: {})".format(row_idx))
-                        print("the addess is existed in the table.")
-                        print("-" * 60)
-                        raise SyntaxError
-
-                    title = ws.cell(row_idx, 2).value
-                    if title is not None:
-                        title = str(title).strip()
-                    reg_list = RegList(title, [])
-                    self.reg_table[addr] = reg_list
-
-            try:
-                bits = str(ws.cell(row_idx, 4).value).split('_')
-                msb = self.str2int(bits[0])
-                lsb = self.str2int(bits[1]) if len(bits) > 1 else msb
-                try:
-                    is_signed = ws.cell(row_idx, 3).font.__getattr__("color").rgb == "FF0000FF"
-                except Exception:
-                    is_signed = False
-                init_val = self.str2int(str(ws.cell(row_idx, 3).value), is_signed, msb - lsb + 1)
-                toks = str(ws.cell(row_idx, 5).value).split('\n')
-                reg_name = toks[0].strip().upper()
-                comment = None if len(toks) == 1 else ', '.join([tok.strip() for tok in toks[1:]])
-            except Exception as e:
-                print("-" * 60)
-                print("ExcelParseError: (row: {})".format(row_idx))
-                print("register syntax error (INI/Bits/Member).")
-                print("-" * 60)
-                raise e
-
-            try:
-                is_access = ws.cell(row_idx, 5).font.__getattr__("color").rgb != "FF808080"
-            except Exception:
-                is_access = True
-            reg = Reg(reg_name, addr, msb, lsb, is_signed, is_access, init_val, comment, row_idx)
-            reg_list.regs.append(reg)
-
-            if len(self.ini_table):
-                ini_grp = self.ini_table[-1]
-            else:
-                ini_grp = INIGroup(None, 0, [])
-                self.ini_table.append(ini_grp)
-
-            reg_len = len(reg_name)
-            if reg_len > ini_grp.max_len:
-                ini_grp.max_len = reg_len
-            ini_grp.regs.append(reg)
-
-        wb.close()
-
-        if self.is_debug:
-            self.show_reg_table("=== XLS TABLE PARSER ===")
-            self.show_ini_table("=== INI TABLE PARSER ===")
     #}}}
 
     def ini_parser(self, ini_fp: str, is_batch=False, start=0, end=0):
@@ -447,7 +237,7 @@ class PatternList:
                             try:
                                 if reg.name in pat.regs:
                                     reg_bits = reg.msb - reg.lsb + 1
-                                    reg_val = self.str2int(pat.regs[reg.name], reg.is_signed, reg_bits)
+                                    reg_val = str2int(pat.regs[reg.name], reg.is_signed, reg_bits)
                                 else:
                                     reg_val = reg.init_val
                             except Exception as e:
@@ -493,7 +283,7 @@ class PatternList:
 
                             if reg.is_access and reg.name in pat.regs:
                                 try:
-                                    reg_val = self.str2int(pat.regs[reg.name], reg.is_signed, bits)
+                                    reg_val = str2int(pat.regs[reg.name], reg.is_signed, bits)
                                 except Exception as e:
                                     print("-" * 60)
                                     print("RegisterValueError:")
@@ -547,7 +337,7 @@ class PatternList:
                         reg_val = reg.init_val
                     else:
                         try:
-                            reg_val = self.str2int(pat.regs[reg.name], reg.is_signed, bits)
+                            reg_val = str2int(pat.regs[reg.name], reg.is_signed, bits)
                         except Exception as e:
                             print("-" * 60)
                             print("RegisterValueError:")
@@ -585,84 +375,6 @@ class PatternList:
             wb.save(os.path.join('progp_out', 'register.xlsx'))
 
         wb.close()
-    #}}}
-
-    def str2int(self, str_: str, is_signed: bool=False, bits: int=32) -> int:
-        """Convert string to integer (with HEX check)"""  #{{{
-        if str_.startswith('0x') or str_.startswith('0X') :
-            num = int(str_, 16)
-            if num >> bits:
-                raise ValueError("number overflow")
-            if is_signed:
-                sign = num >> (bits - 1)
-                num |= ~((sign << bits) - 1)
-        else:
-            num = int(str_)
-            if is_signed:
-                bits -= 1
-            if not is_signed and num < 0:
-                raise ValueError("negative value founded in unsigned mode.")
-            elif num > 0 and abs(num) >= (1 << bits):
-                raise ValueError("number overflow")
-            elif num < 0 and abs(num) > (1 << bits):
-                raise ValueError("number overflow")
-                
-        return num
-    #}}}
-
-    def sign_check(self, str_: str) -> bool:
-        """Syntax check for sign type flag"""  #{{{
-        str_ = str_.lower()
-
-        if str_ == 's':
-            return True
-        elif str_ == 'u':
-            return False
-        else:
-            raise SyntaxError("sign type flag must be 's' or 'u'")
-    #}}}
-
-    def access_check(self, str_: str) -> bool:
-        """Syntax check for access flag"""  #{{{
-        str_ = str_.lower()
-
-        if str_ == 'y':
-            return True
-        elif str_ == 'n':
-            return False
-        else:
-            raise SyntaxError("access flag must be 'y' or 'n'")
-    #}}}
-
-    def show_reg_table(self, msg: str):
-        """Show register table"""  #{{{
-        print(msg)
-        reg_cnt = 0
-        for addr, reg_list in self.reg_table.items():
-            print(f"Addr: {addr:#06x} Title: {reg_list.title}")
-            for reg in reg_list.regs:
-                print("  Reg:      {}, {}, {}, {}, {}, {}".format(
-                    reg.name, reg.msb, reg.lsb, reg.is_signed, reg.is_access, reg.init_val))
-                print("  Comment:  {}".format(reg.comment))
-                print("  RowIndex: {}\n".format(reg.row_idx))
-                reg_cnt += 1
-
-        print(f"register count: {reg_cnt}\n")
-    #}}}
-
-    def show_ini_table(self, msg: str):
-        """Show ini table"""  #{{{
-        print(msg)
-        reg_cnt = 0
-        for ini_grp in self.ini_table:
-            print(f"Tag: {ini_grp.tag}")
-            for reg in ini_grp.regs:
-                print("  {} = {}".format(
-                        reg.name.ljust(ini_grp.max_len),
-                        reg.init_val))
-                reg_cnt += 1
-
-        print(f"\nregister count: {reg_cnt}\n")
     #}}}
 
     def export_table_db(self, db_fp):
@@ -835,5 +547,5 @@ def main(is_debug=False):
 #}}}
 
 if __name__ == '__main__':
-    main(False)
+    sys.exit(main(False))
 

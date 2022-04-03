@@ -80,4 +80,4 @@ sign_reg        0x44    3   0   s   y   0xf
 
 ### Hex Out Reg ###
 
-HEX: reg_addr2 
+H: reg_addr2 
