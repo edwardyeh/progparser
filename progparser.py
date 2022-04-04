@@ -8,6 +8,7 @@ import pickle
 import shutil
 import sys
 import textwrap
+from pathlib import Path
 from typing import NamedTuple
 
 import openpyxl
@@ -42,7 +43,7 @@ class PatternList(ReferenceTable):
                 self.reg_table = pickle.load(f)
                 self.ini_table = pickle.load(f)
         else:
-            raise ValueError(f"Unsupported register table type ({table_type})")
+            raise ValueError(f"unsupported register table type ({table_type})")
     #}}}
 
     def ini_parser(self, ini_fp: str, is_batch=False, start=0, end=0):
@@ -213,15 +214,31 @@ class PatternList(ReferenceTable):
         wb.close()
     #}}}
 
-    def ini_dump(self, file_ext: str='.ini', pat_out_fp=None):
+    def ini_dump(self, pat_dir, pat_name=None, pat_ext=None, is_force=False):
         """Dump pattern with ini format""" #{{{
-        for pat in self.pat_list:
-            if pat_out_fp is not None:
-                pat_fp = pat_out_fp
-            else:
-                pat_fp = os.path.join('progp_out', pat.name + file_ext)
+        if not pat_ext:
+            pat_ext = '.ini'
 
-            with open(pat_fp, 'w') as f:
+        pat_cnt = 0
+        pat_ignore = 0
+        is_batch = len(self.pat_list) > 1
+
+        for pat in self.pat_list:
+            if pat_name:
+                pname = pat_name + str(pat_cnt) if is_batch else pat_name
+            else:
+                pname = pat.name
+
+            pat_path = pat_dir / (pname + pat_ext)
+
+            if pat_path.exists() and not is_force:
+                if input(f"{pname+pat_ext} existed, overwrite? (y/n) ").lower() != 'y':
+                    print('Ignore')
+                    pat_cnt += 1
+                    pat_ignore += 1
+                    continue
+
+            with open(pat_path, 'w') as f:
                 is_first_tag = True
                 for ini_grp in self.ini_table:
                     if ini_grp.tag is not None:
@@ -267,17 +284,38 @@ class PatternList(ReferenceTable):
                                 f.write(f" # {reg.comment}\n")
                             else:
                                 f.write("\n")
+            pat_cnt += 1
+        print()
+        print(f"=== Number of pattern generated: {pat_cnt - pat_ignore}")
+        print(f"=== Number of pattern ignored:   {pat_ignore}")
+        print()
     #}}}
 
-    def hex_dump(self, file_ext: str='.pat', pat_out_fp=None):
+    def hex_dump(self, pat_dir, pat_name=None, pat_ext=None, is_force=False):
         """Dump pattern with hex format"""  #{{{
-        for pat in self.pat_list:
-            if pat_out_fp is not None:
-                pat_fp = pat_out_fp
-            else:
-                pat_fp = os.path.join('progp_out', pat.name + file_ext)
+        if not pat_ext:
+            pat_ext = '.pat'
 
-            with open(pat_fp, 'w') as f:
+        pat_cnt = 0
+        pat_ignore = 0
+        is_batch = len(self.pat_list) > 1
+
+        for pat in self.pat_list:
+            if pat_name:
+                pname = pat_name + str(pat_cnt) if is_batch else pat_name
+            else:
+                pname = pat.name
+
+            pat_path = pat_dir / (pname + pat_ext)
+
+            if pat_path.exists() and not is_force:
+                if input(f"{pname+pat_ext} existed, overwrite? (y/n) ").lower() != 'y':
+                    print('Ignore')
+                    pat_cnt += 1
+                    pat_ignore += 1
+                    continue
+
+            with open(pat_path, 'w') as f:
                 for addr in range(0, max(self.reg_table.keys()) + 4, 4):
                     word_val = 0
                     try:
@@ -308,10 +346,24 @@ class PatternList(ReferenceTable):
                         f.write("{:04x}{:08x}\n".format(addr, word_val))
                     except Exception:
                         f.write("{:04x}{:08x}\n".format(addr, 0))
+            pat_cnt += 1
+        print()
+        print(f"=== Number of pattern generated: {pat_cnt - pat_ignore}")
+        print(f"=== Number of pattern ignored:   {pat_ignore}")
+        print()
     #}}}
 
-    def xlsx_dump(self, ref_fp : str, pat_out_fp=None, is_init=False):
+    def xlsx_dump(self, ref_fp : str, pat_dir, pat_name=None, is_force=False, is_init=False):
         """Dump pattern with excel format""" #{{{
+        pname = pat_name if pat_name else 'register'
+        pat_path = pat_dir / (pname + '.xlsx')
+
+        if pat_path.exists() and not is_force:
+            if input(f"{pname+'.xlsx'} existed, overwrite? (y/n) ").lower() != 'y':
+                print('Terminal')
+                exit(0)
+
+        pat_cnt = 0
         wb = openpyxl.load_workbook(ref_fp)
         ws = wb.worksheets[0]
 
@@ -378,13 +430,11 @@ class PatternList(ReferenceTable):
             cell.alignment = copy.copy(row.alignment)
 
             pat_idx += 1
+            pat_cnt += 1
 
-        if pat_out_fp is not None:
-            wb.save(pat_out_fp)
-        else:
-            wb.save(os.path.join('progp_out', 'register.xlsx'))
-
+        wb.save(pat_path)
         wb.close()
+        print(f"\n=== Number of pattern generated: {pat_cnt}\n")
     #}}}
 
     def export_table_db(self, db_fp):
@@ -474,18 +524,14 @@ def main(is_debug=False):
     parser.add_argument('-e', dest='end_id', metavar='<id>', type=int, default=0,
                                 help="end pattern index")
 
-    out_gparser = parser.add_mutually_exclusive_group()
-    out_gparser.add_argument('-o', dest='pat_out_fp', metavar='<path>', type=str,
-                                    help=textwrap.dedent("""\
-                                    specify output file path 
-                                    (ignore when ini/hex out at batch mode)"""))
-    out_gparser.add_argument('-O', dest='force_pat_out_fp', metavar='<path>', type=str,
-                                    help=textwrap.dedent("""\
-                                    specify output file path 
-                                    (force overwrite, ignore when ini/hex out at batch mode)"""))
-
+    parser.add_argument('-f', dest='is_force', action='store_true', 
+                                    help="force write with custom pattern dump")
+    parser.add_argument('--dir', dest='cus_dir', metavar='<path>', type=str,
+                                    help="custom dump directory")
+    parser.add_argument('--pat', dest='cus_pat', metavar='<path>', type=str,
+                                    help="custom dump pattern name")
     parser.add_argument('--ext', dest='cus_ext', metavar='<ext>', type=str,
-                                    help="custom file extension (ini/hex dump only)")
+                                    help="custom dump file extension (excel ignore)")
 
     args = parser.parse_args()
 
@@ -499,8 +545,6 @@ def main(is_debug=False):
         pat_list = PatternList(args.xlsx_table_fp2, 'xlsx', is_debug)
     # else:
     #     pat_list = PatternList(args.database_fp, 'db', is_debug)
-
-    is_init = True if args.xlsx_table_fp2 else False
 
     ## Only dump reference table database
 
@@ -519,41 +563,49 @@ def main(is_debug=False):
 
     ## Dump pattern
 
-    pat_out_fp = None
-    if (args.is_batch and args.out_fmt != 'xlsx') or \
-       (args.force_pat_out_fp is None and args.pat_out_fp is None):
-        if os.path.isfile('progp_out'):
-            os.remove('progp_out')
-        elif os.path.isdir('progp_out'):
-            shutil.rmtree('progp_out')
-        os.mkdir('progp_out')
+    if not args.cus_dir:
+        pat_dir = Path('progp_out')
+        if pat_dir.exists():
+            shutil.rmtree(pat_dir) if pat_dir.is_dir() else pat_dir.unlink()
+        pat_dir.mkdir()
     else:
-        if args.force_pat_out_fp is not None:
-            pat_out_fp = args.force_pat_out_fp
+        if not args.is_batch or args.out_fmt == 'xlsx':
+            if (pat_dir := Path(args.cus_dir)).resolve() != Path().resolve():
+                if pat_dir.exists():
+                    if not args.is_force and input("output directory existed, overwrite? (y/n) ").lower() != 'y':
+                        print('Terminated')
+                        exit(0)
+                    shutil.rmtree(pat_dir) if pat_dir.is_dir() else pat_dir.unlink()
+                pat_dir.mkdir()
         else:
-            pat_out_fp = args.pat_out_fp
-            if os.path.exists(args.pat_out_fp):
-                ret = input("File existed, overwrite? (y/n) ")
-                if ret.lower() == 'y':
-                    os.remove(pat_out_fp)
-                else:
+            if (pat_dir := Path(args.cus_dir)).resolve() == Path().resolve():
+                print("[Error] custom dump directory can't be '.' in the batch mode.")
+                exit(1)
+            if pat_dir.exists():
+                if not args.is_force and input("output directory existed, overwrite? (y/n) ").lower() != 'y':
                     print('Terminated')
-                    exit(1)
+                    exit(0)
+                shutil.rmtree(pat_dir) if pat_dir.is_dir() else pat_dir.unlink()
+            pat_dir.mkdir()
+
+    pat_name = args.cus_pat if args.cus_pat else None
 
     try:
-        file_ext = '.' + args.cus_ext.split('.')[-1]
+        pat_ext = '.' + args.cus_ext.split('.')[-1]
     except Exception:
-        file_ext = '.ini' if args.out_fmt == 'ini' else '.pat'
+        pat_ext = None
 
     if args.out_fmt == 'ini':
-        pat_list.ini_dump(file_ext, pat_out_fp)
+        pat_list.ini_dump(pat_dir, pat_name, pat_ext, args.is_force)
     elif args.out_fmt == 'hex':
-        pat_list.hex_dump(file_ext, pat_out_fp)
+        pat_list.hex_dump(pat_dir, pat_name, pat_ext, args.is_force)
     else:
+        is_init = True if args.xlsx_table_fp2 else False
+
         if args.xlsx_table_fp:
-            pat_list.xlsx_dump(args.xlsx_table_fp, pat_out_fp, is_init)
+            pat_list.xlsx_dump(args.xlsx_table_fp, pat_dir, pat_name, args.is_force, is_init)
         elif args.xlsx_table_fp2:
-            pat_list.xlsx_dump(args.xlsx_table_fp2, pat_out_fp, is_init)
+            pat_list.xlsx_dump(args.xlsx_table_fp2, pat_dir, pat_name, args.is_force, is_init)
         else:
             raise TypeError("need an excel register table when output excel file")
 #}}}
