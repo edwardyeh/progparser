@@ -12,9 +12,10 @@ from .utils.ref_table import ReferenceTable
 class CompareTable(ReferenceTable):
     """Programming register table"""  #{{{
 
-    def __init__(self, table_fp: str, table_type: str, is_sign_ignore: bool, is_access_ignore: bool):
+    def __init__(self, table_fp: str, table_type: str, 
+                 is_sign_ignore: bool, is_access_ignore: bool, debug_mode=None):
     #{{{ 
-        super().__init__()
+        super().__init__(debug_mode)
 
         self.is_sign_ignore = is_sign_ignore
         self.is_access_ignore = is_access_ignore
@@ -124,7 +125,7 @@ class CompareTable(ReferenceTable):
 
 ### Main Function ###
 
-def main(is_debug=False):
+def main():
     """Main function"""  #{{{
     parser = argparse.ArgumentParser(
             formatter_class=argparse.RawTextHelpFormatter,
@@ -146,7 +147,20 @@ def main(is_debug=False):
     parser.add_argument('-a', dest='is_access_ignore', action='store_true', 
                                 help="ignore register access check")
 
-    args = parser.parse_args()
+    args, args_dbg = parser.parse_known_args()
+
+    parser_dbg = argparse.ArgumentParser()
+    parser_dbg.add_argument('--dbg', dest='debug_mode', metavar='<pattern>',
+                                        help="debug mode (tag: t)")
+
+    args_dbg = parser_dbg.parse_known_args(args_dbg)[0]
+
+    debug_mode = set()
+    try:
+        for i in range(len(args_dbg.debug_mode)):
+            debug_mode.add(args_dbg.debug_mode[i])
+    except Exception:
+        pass
 
     # Compare register table
 
@@ -156,4 +170,4 @@ def main(is_debug=False):
 #}}}
 
 if __name__ == '__main__':
-    sys.exit(main(False))
+    sys.exit(main())

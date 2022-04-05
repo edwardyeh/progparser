@@ -40,12 +40,12 @@ class INIGroup:
 class ReferenceTable:
     """Reference table for register parsing"""
 
-    def __init__(self, is_debug: bool=False):
+    def __init__(self, debug_mode: set=None):
     #{{{ 
         # reg_table = {addr1: reg_list1, addr2: reg_list2, ...}
         # ini_table = [INIGroup1, INIGroup2, ...]
 
-        self.is_debug = is_debug
+        self.debug_mode = set() if not debug_mode else debug_mode
         self.reg_table = {} 
         self.ini_table = []
         self.hex_out = set()
@@ -135,7 +135,7 @@ class ReferenceTable:
                 line = f.readline()
                 line_no += 1
 
-        if self.is_debug:
+        if 't' in self.debug_mode:
             self.show_reg_table("=== REG TABLE PARSER ===")
             self.show_ini_table("=== INI TABLE PARSER ===")
     #}}}
@@ -214,7 +214,7 @@ class ReferenceTable:
 
         wb.close()
 
-        if self.is_debug:
+        if 't' in self.debug_mode:
             self.show_reg_table("=== XLS TABLE PARSER ===")
             self.show_ini_table("=== INI TABLE PARSER ===")
     #}}}

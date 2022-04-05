@@ -12,9 +12,9 @@ from .utils.ref_table import ReferenceTable
 class RegisterTable(ReferenceTable):
     """Programming register table"""  #{{{
 
-    def __init__(self, table_fp: str, table_type: str, is_debug: bool):
+    def __init__(self, table_fp: str, table_type: str, debug_mode=None):
     #{{{ 
-        super().__init__(is_debug)
+        super().__init__(debug_mode)
 
         if table_type == 'txt':
             self.txt_table_parser(table_fp)
@@ -27,7 +27,7 @@ class RegisterTable(ReferenceTable):
 
 ### Main Function ###
 
-def main(is_debug=False):
+def main():
     """Main function"""  #{{{
     parser = argparse.ArgumentParser(
             formatter_class=argparse.RawTextHelpFormatter,
@@ -45,11 +45,24 @@ def main(is_debug=False):
     parser.add_argument('-i', dest='is_init', action='store_true', 
                                 help="create initial pattern")
 
-    args = parser.parse_args()
+    args, args_dbg = parser.parse_known_args()
+
+    parser_dbg = argparse.ArgumentParser()
+    parser_dbg.add_argument('--dbg', dest='debug_mode', metavar='<pattern>',
+                                        help="debug mode (tag: t)")
+
+    args_dbg = parser_dbg.parse_known_args(args_dbg)[0]
+
+    debug_mode = set()
+    try:
+        for i in range(len(args_dbg.debug_mode)):
+            debug_mode.add(args_dbg.debug_mode[i])
+    except Exception:
+        pass
 
     # Parser register table
 
-    pat_list = RegisterTable(args.table_fp, args.in_type, is_debug)
+    pat_list = RegisterTable(args.table_fp, args.in_type, debug_mode)
 
     # Dump register table
 
@@ -60,4 +73,4 @@ def main(is_debug=False):
 #}}}
 
 if __name__ == '__main__':
-    sys.exit(main(False))
+    sys.exit(main())

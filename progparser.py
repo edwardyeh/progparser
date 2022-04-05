@@ -27,11 +27,11 @@ class Pat(NamedTuple):
 class PatternList(ReferenceTable):
     """Programming pattern list"""  #{{{
 
-    def __init__(self, table_fp: str, table_type: str, is_debug: bool):
+    def __init__(self, table_fp: str, table_type: str, debug_mode: set=None):
     #{{{
         # pat_list = [pat1, pat2, ...]
 
-        super().__init__(is_debug)
+        super().__init__(debug_mode)
         self.pat_list  = []
 
         if table_type == 'txt':
@@ -93,7 +93,7 @@ class PatternList(ReferenceTable):
                     line = f.readline()
                     line_no += 1
 
-            if self.is_debug:
+            if 'p' in self.debug_mode:
                 print(f"=== INI READ ({cfg_fp}) ===")
                 for item in pat_regs.items():
                     print(item)
@@ -140,7 +140,7 @@ class PatternList(ReferenceTable):
                             pat_regs[reg.name] = hex((val >> reg.lsb) & mask)
                     line = f.readline()
 
-            if self.is_debug:
+            if 'p' in self.debug_mode:
                 print(f"=== HEX READ ({cfg_fp}) ===")
                 for item in pat_regs.items():
                     print(item)
@@ -203,7 +203,7 @@ class PatternList(ReferenceTable):
                         print('-' * 60)
                         raise e
 
-            if self.is_debug:
+            if 'p' in self.debug_mode:
                 print(f"=== XLS READ ({pat_name}) ===")
                 for item in pat_regs.items():
                     print(item)
@@ -447,7 +447,7 @@ class PatternList(ReferenceTable):
 
 ### Main Function ###
 
-def main(is_debug=False):
+def main():
     """Main function""" #{{{
     parser = argparse.ArgumentParser(
             formatter_class=argparse.RawTextHelpFormatter,
@@ -497,23 +497,23 @@ def main(is_debug=False):
                                     help="input format (choices: ini/hex/xlsx)") 
     parser.add_argument('out_fmt', metavar='format_out', choices=['ini', 'hex', 'xlsx'], 
                                     help="output format (choices: ini/hex/xlsx)") 
-    parser.add_argument('pat_in_fp', metavar='pattern_in', type=str, 
+    parser.add_argument('pat_in_fp', metavar='pattern_in',
                                     help="input pattern path") 
 
     table_gparser = parser.add_mutually_exclusive_group(required=True)
-    table_gparser.add_argument('-t', dest='txt_table_fp', metavar='<path>', type=str, 
+    table_gparser.add_argument('-t', dest='txt_table_fp', metavar='<path>',
                                         help="use text-style reference table")
-    table_gparser.add_argument('-x', dest='xlsx_table_fp', metavar='<path>', type=str,
+    table_gparser.add_argument('-x', dest='xlsx_table_fp', metavar='<path>',
                                         help=textwrap.dedent("""\
                                         use excel-style reference table (current table append)"""))
-    table_gparser.add_argument('-X', dest='xlsx_table_fp2', metavar='<path>', type=str,
+    table_gparser.add_argument('-X', dest='xlsx_table_fp2', metavar='<path>',
                                         help=textwrap.dedent("""\
                                         use excel-style reference table (new table create)"""))
-    # table_gparser.add_argument('-d', dest='database_fp', metavar='<path>', type=str,
+    # table_gparser.add_argument('-d', dest='database_fp', metavar='<path>',
     #                                     help=textwrap.dedent("""\
     #                                     use pre-parsed reference table database (pickle type)"""))
 
-    # parser.add_argument('-p', dest='pickle_out_fp', metavar='<path>', type=str,
+    # parser.add_argument('-p', dest='pickle_out_fp', metavar='<path>',
     #                             help=textwrap.dedent("""\
     #                             export reference table database (pickle type)"""))
 
@@ -526,25 +526,38 @@ def main(is_debug=False):
 
     parser.add_argument('-f', dest='is_force', action='store_true', 
                                     help="force write with custom pattern dump")
-    parser.add_argument('--dir', dest='cus_dir', metavar='<path>', type=str,
+    parser.add_argument('--dir', dest='cus_dir', metavar='<path>',
                                     help="custom dump directory")
-    parser.add_argument('--pat', dest='cus_pat', metavar='<path>', type=str,
+    parser.add_argument('--pat', dest='cus_pat', metavar='<path>',
                                     help="custom dump pattern name")
-    parser.add_argument('--ext', dest='cus_ext', metavar='<ext>', type=str,
+    parser.add_argument('--ext', dest='cus_ext', metavar='<ext>',
                                     help="custom dump file extension (excel ignore)")
 
-    args = parser.parse_args()
+    args, args_dbg = parser.parse_known_args()
+
+    parser_dbg = argparse.ArgumentParser()
+    parser_dbg.add_argument('--dbg', dest='debug_mode', metavar='<pattern>',
+                                        help="debug mode (tag: t/p)")
+
+    args_dbg = parser_dbg.parse_known_args(args_dbg)[0]
+
+    debug_mode = set()
+    try:
+        for i in range(len(args_dbg.debug_mode)):
+            debug_mode.add(args_dbg.debug_mode[i])
+    except Exception:
+        pass
 
     ## Parser register table
 
     if args.txt_table_fp:
-        pat_list = PatternList(args.txt_table_fp, 'txt', is_debug)
+        pat_list = PatternList(args.txt_table_fp, 'txt', debug_mode)
     elif args.xlsx_table_fp:
-        pat_list = PatternList(args.xlsx_table_fp, 'xlsx', is_debug)
+        pat_list = PatternList(args.xlsx_table_fp, 'xlsx', debug_mode)
     elif args.xlsx_table_fp2:
-        pat_list = PatternList(args.xlsx_table_fp2, 'xlsx', is_debug)
+        pat_list = PatternList(args.xlsx_table_fp2, 'xlsx', debug_mode)
     # else:
-    #     pat_list = PatternList(args.database_fp, 'db', is_debug)
+    #     pat_list = PatternList(args.database_fp, 'db', debug_mode)
 
     ## Only dump reference table database
 
@@ -611,5 +624,5 @@ def main(is_debug=False):
 #}}}
 
 if __name__ == '__main__':
-    sys.exit(main(False))
+    sys.exit(main())
 
