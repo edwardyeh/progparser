@@ -2,12 +2,9 @@
 Programming reference table convertor
 """
 import argparse
-import os
-import shutil
 import sys
 import textwrap
 
-from .utils.general import str2int
 from .utils.ref_table import ReferenceTable
 
 ### Class Definition ###
@@ -15,14 +12,14 @@ from .utils.ref_table import ReferenceTable
 class RegisterTable(ReferenceTable):
     """Programming register table"""  #{{{
 
-    def __init__(self, table_fp: str, table_type: str, is_debug: bool):
+    def __init__(self, table_fp: str, table_type: str, debug_mode=None):
     #{{{ 
-        super().__init__(is_debug)
+        super().__init__(debug_mode)
 
         if table_type == 'txt':
             self.txt_table_parser(table_fp)
-        elif table_type == 'xls':
-            self.xls_table_parser(table_fp)
+        elif table_type == 'xlsx':
+            self.xlsx_table_parser(table_fp)
         else:
             raise ValueError(f"Unsupported input table style '{table_type}'")
     #}}}
@@ -30,39 +27,50 @@ class RegisterTable(ReferenceTable):
 
 ### Main Function ###
 
-def main(is_debug=False):
+def main():
     """Main function"""  #{{{
     parser = argparse.ArgumentParser(
             formatter_class=argparse.RawTextHelpFormatter,
-            description=textwrap.dedent('''
+            description=textwrap.dedent("""
                 Programming register table converter.
-                '''))
+                """))
 
-    parser.add_argument('in_type', metavar='input_type', 
-                                    help='input type (option: txt/xls)') 
-    parser.add_argument('out_type', metavar='output_type', 
-                                    help='output type (option: txt/xls)') 
+    parser.add_argument('in_type', metavar='input_type', choices=['txt', 'xlsx'],
+                                    help="input type (option: txt/xlsx)") 
+    parser.add_argument('out_type', metavar='output_type', choices=['txt', 'xlsx'], 
+                                    help="output type (option: txt/xlsx)") 
     parser.add_argument('table_fp', metavar='table_in',
-                                    help='reference table in') 
+                                    help="reference table in") 
 
     parser.add_argument('-i', dest='is_init', action='store_true', 
-                                help='create initial pattern')
+                                help="create initial pattern")
 
-    args = parser.parse_args()
+    args, args_dbg = parser.parse_known_args()
+
+    parser_dbg = argparse.ArgumentParser()
+    parser_dbg.add_argument('--dbg', dest='debug_mode', metavar='<pattern>',
+                                        help="debug mode (tag: t)")
+
+    args_dbg = parser_dbg.parse_known_args(args_dbg)[0]
+
+    debug_mode = set()
+    try:
+        for i in range(len(args_dbg.debug_mode)):
+            debug_mode.add(args_dbg.debug_mode[i])
+    except Exception:
+        pass
 
     # Parser register table
 
-    pat_list = RegisterTable(args.table_fp, args.in_type, is_debug)
+    pat_list = RegisterTable(args.table_fp, args.in_type, debug_mode)
 
     # Dump register table
 
     if args.out_type == 'txt':
         pat_list.txt_export(args.is_init)
-    elif args.out_type == 'xls':
-        pat_list.xls_export(args.is_init, is_rsv_ext=True)
     else:
-        raise ValueError(f"Unsupported output table type ({args.out_type})")
+        pat_list.xlsx_export(args.is_init, is_rsv_ext=True)
 #}}}
 
 if __name__ == '__main__':
-    sys.exit(main(False))
+    sys.exit(main())

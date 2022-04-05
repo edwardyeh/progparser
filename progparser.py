@@ -3,12 +3,12 @@ Programming Register Parser
 """
 import argparse
 import copy
-# import math
 import os
 import pickle
 import shutil
 import sys
 import textwrap
+from pathlib import Path
 from typing import NamedTuple
 
 import openpyxl
@@ -27,23 +27,23 @@ class Pat(NamedTuple):
 class PatternList(ReferenceTable):
     """Programming pattern list"""  #{{{
 
-    def __init__(self, table_fp: str, table_type: str, is_debug: bool):
+    def __init__(self, table_fp: str, table_type: str, debug_mode: set=None):
     #{{{
         # pat_list = [pat1, pat2, ...]
 
-        super().__init__(is_debug)
+        super().__init__(debug_mode)
         self.pat_list  = []
 
         if table_type == 'txt':
             self.txt_table_parser(table_fp)
-        elif table_type == 'xls':
-            self.xls_table_parser(table_fp)
+        elif table_type == 'xlsx':
+            self.xlsx_table_parser(table_fp)
         elif table_type == 'db':
-            with open(table_fp, "rb") as f:
+            with open(table_fp, 'rb') as f:
                 self.reg_table = pickle.load(f)
                 self.ini_table = pickle.load(f)
         else:
-            raise ValueError(f"Unsupported register table type ({table_type})")
+            raise ValueError(f"unsupported register table type ({table_type})")
     #}}}
 
     def ini_parser(self, ini_fp: str, is_batch=False, start=0, end=0):
@@ -76,7 +76,7 @@ class PatternList(ReferenceTable):
                 while line:
                     if line.startswith('['):
                         pass
-                    elif line.startswith(self.comment_sign):
+                    elif line.startswith('#'):
                         pass
                     else:
                         toks = line.split()
@@ -84,16 +84,16 @@ class PatternList(ReferenceTable):
                             if len(toks) and toks[1] == '=':
                                 pat_regs[toks[0].upper()] = toks[2]
                         except Exception as e:
-                            print("-" * 60)
+                            print('-' * 60)
                             print("INIRegParseError: (line: {})".format(line_no))
                             print("syntax of register descriptor:")
                             print("  '<reg_name> = <value> [comment]'")
-                            print("-" * 60)
+                            print('-' * 60)
                             raise e
                     line = f.readline()
                     line_no += 1
 
-            if self.is_debug:
+            if 'p' in self.debug_mode:
                 print(f"=== INI READ ({cfg_fp}) ===")
                 for item in pat_regs.items():
                     print(item)
@@ -140,7 +140,7 @@ class PatternList(ReferenceTable):
                             pat_regs[reg.name] = hex((val >> reg.lsb) & mask)
                     line = f.readline()
 
-            if self.is_debug:
+            if 'p' in self.debug_mode:
                 print(f"=== HEX READ ({cfg_fp}) ===")
                 for item in pat_regs.items():
                     print(item)
@@ -151,9 +151,9 @@ class PatternList(ReferenceTable):
             self.pat_list.append(Pat(pat_name, pat_regs))
     #}}}
 
-    def xls_parser(self, xls_fp: str, is_batch=False, start=0, end=0):
+    def xlsx_parser(self, xlsx_fp: str, is_batch=False, start=0, end=0):
         """Pattern parser for INI format"""  #{{{
-        wb = openpyxl.load_workbook(xls_fp, data_only=True)
+        wb = openpyxl.load_workbook(xlsx_fp, data_only=True)
         ws = wb.worksheets[0]
 
         if is_batch:
@@ -181,11 +181,11 @@ class PatternList(ReferenceTable):
         for j in range(start, end+1):
             val_col = tuple(ws.iter_cols(j, j, None, None, True))[0]
             pat_name = str(val_col[1]).strip()
-            if pat_name == "None" or pat_name == "":
+            if pat_name == 'None' or pat_name == '':
                 continue
 
             try:
-                if ws.cell(2, j).font.__getattr__("color").rgb == "FF808080":
+                if ws.cell(2, j).font.__getattr__('color').rgb.lower() == 'ff808080':
                     continue
             except Exception:
                 pass
@@ -196,14 +196,14 @@ class PatternList(ReferenceTable):
                 reg_name = reg_name.strip().upper()
                 if reg_name != 'RESERVED':
                     try:
-                        pat_regs[reg_name] = "0x" + str(val_col[i])
+                        pat_regs[reg_name] = '0x' + str(val_col[i])
                     except Exception as e:
-                        print("-" * 60)
+                        print('-' * 60)
                         print("ExcelRegParseError: (row: {})".format(i+1))
-                        print("-" * 60)
+                        print('-' * 60)
                         raise e
 
-            if self.is_debug:
+            if 'p' in self.debug_mode:
                 print(f"=== XLS READ ({pat_name}) ===")
                 for item in pat_regs.items():
                     print(item)
@@ -214,15 +214,31 @@ class PatternList(ReferenceTable):
         wb.close()
     #}}}
 
-    def ini_dump(self, pat_out_fp=None):
+    def ini_dump(self, pat_dir, pat_name=None, pat_ext=None, is_force=False):
         """Dump pattern with ini format""" #{{{
-        for pat in self.pat_list:
-            if pat_out_fp is not None:
-                pat_fp = pat_out_fp
-            else:
-                pat_fp = os.path.join('progp_out', pat.name + '.ini')
+        if not pat_ext:
+            pat_ext = '.ini'
 
-            with open(pat_fp, 'w') as f:
+        pat_cnt = 0
+        pat_ignore = 0
+        is_batch = len(self.pat_list) > 1
+
+        for pat in self.pat_list:
+            if pat_name:
+                pname = pat_name + str(pat_cnt) if is_batch else pat_name
+            else:
+                pname = pat.name
+
+            pat_path = pat_dir / (pname + pat_ext)
+
+            if pat_path.exists() and not is_force:
+                if input(f"{pname+pat_ext} existed, overwrite? (y/n) ").lower() != 'y':
+                    print('Ignore')
+                    pat_cnt += 1
+                    pat_ignore += 1
+                    continue
+
+            with open(pat_path, 'w') as f:
                 is_first_tag = True
                 for ini_grp in self.ini_table:
                     if ini_grp.tag is not None:
@@ -233,19 +249,24 @@ class PatternList(ReferenceTable):
                         f.write(f"[{ini_grp.tag}]\n")
 
                     for reg in ini_grp.regs:
+                        if reg.name == '===':
+                            f.write("\n")
+                            continue
+
                         if reg.is_access:
                             try:
                                 if reg.name in pat.regs:
                                     reg_bits = reg.msb - reg.lsb + 1
                                     reg_val = str2int(pat.regs[reg.name], reg.is_signed, reg_bits)
                                 else:
+                                    print(f"[Warning] '{reg.name.lower()}' is not found in pattern '{pat.name}', use default value.")
                                     reg_val = reg.init_val
                             except Exception as e:
-                                print("-" * 60)
+                                print('-' * 60)
                                 print("RegisterValueError:")
                                 print("pattern:  {}".format(pat.name))
                                 print("register: {}".format(reg.name))
-                                print("-" * 60)
+                                print('-' * 60)
                                 raise e
 
                             if reg.name in self.hex_out:
@@ -263,34 +284,60 @@ class PatternList(ReferenceTable):
                                 f.write(f" # {reg.comment}\n")
                             else:
                                 f.write("\n")
+            pat_cnt += 1
+        print()
+        print(f"=== Number of pattern generated: {pat_cnt - pat_ignore}")
+        print(f"=== Number of pattern ignored:   {pat_ignore}")
+        print()
     #}}}
 
-    def hex_dump(self, pat_out_fp=None):
+    def hex_dump(self, pat_dir, pat_name=None, pat_ext=None, is_force=False):
         """Dump pattern with hex format"""  #{{{
-        for pat in self.pat_list:
-            if pat_out_fp is not None:
-                pat_fp = pat_out_fp
-            else:
-                pat_fp = os.path.join('progp_out', pat.name + '.pat')
+        if not pat_ext:
+            pat_ext = '.pat'
 
-            with open(pat_fp, 'w') as f:
+        pat_cnt = 0
+        pat_ignore = 0
+        is_batch = len(self.pat_list) > 1
+
+        for pat in self.pat_list:
+            if pat_name:
+                pname = pat_name + str(pat_cnt) if is_batch else pat_name
+            else:
+                pname = pat.name
+
+            pat_path = pat_dir / (pname + pat_ext)
+
+            if pat_path.exists() and not is_force:
+                if input(f"{pname+pat_ext} existed, overwrite? (y/n) ").lower() != 'y':
+                    print('Ignore')
+                    pat_cnt += 1
+                    pat_ignore += 1
+                    continue
+
+            with open(pat_path, 'w') as f:
                 for addr in range(0, max(self.reg_table.keys()) + 4, 4):
                     word_val = 0
                     try:
                         for reg in self.reg_table[addr].regs:
                             bits = reg.msb - reg.lsb + 1
                             mask = (1 << bits) - 1
+                            is_reg_exist = reg.name in pat.regs
 
-                            if reg.is_access and reg.name in pat.regs:
-                                try:
-                                    reg_val = str2int(pat.regs[reg.name], reg.is_signed, bits)
-                                except Exception as e:
-                                    print("-" * 60)
-                                    print("RegisterValueError:")
-                                    print("pattern:  {}".format(pat.name))
-                                    print("register: {}".format(reg.name))
-                                    print("-" * 60)
-                                    raise e
+                            if reg.is_access:
+                                if is_reg_exist:
+                                    try:
+                                        reg_val = str2int(pat.regs[reg.name], reg.is_signed, bits)
+                                    except Exception as e:
+                                        print('-' * 60)
+                                        print("RegisterValueError:")
+                                        print("pattern:  {}".format(pat.name))
+                                        print("register: {}".format(reg.name))
+                                        print('-' * 60)
+                                        raise e
+                                else:
+                                    print(f"[Warning] '{reg.name.lower()}' is not found in pattern '{pat.name}', use default value.")
+                                    reg_val = reg.init_val
                             else:
                                 reg_val = reg.init_val
 
@@ -299,10 +346,24 @@ class PatternList(ReferenceTable):
                         f.write("{:04x}{:08x}\n".format(addr, word_val))
                     except Exception:
                         f.write("{:04x}{:08x}\n".format(addr, 0))
+            pat_cnt += 1
+        print()
+        print(f"=== Number of pattern generated: {pat_cnt - pat_ignore}")
+        print(f"=== Number of pattern ignored:   {pat_ignore}")
+        print()
     #}}}
 
-    def xls_dump(self, ref_fp : str, pat_out_fp=None, is_init=False):
+    def xlsx_dump(self, ref_fp : str, pat_dir, pat_name=None, is_force=False, is_init=False):
         """Dump pattern with excel format""" #{{{
+        pname = pat_name if pat_name else 'register'
+        pat_path = pat_dir / (pname + '.xlsx')
+
+        if pat_path.exists() and not is_force:
+            if input(f"{pname+'.xlsx'} existed, overwrite? (y/n) ").lower() != 'y':
+                print('Terminal')
+                exit(0)
+
+        pat_cnt = 0
         wb = openpyxl.load_workbook(ref_fp)
         ws = wb.worksheets[0]
 
@@ -334,16 +395,17 @@ class PatternList(ReferenceTable):
                     if not reg.is_access:
                         reg_val = 0
                     elif reg.name not in pat.regs:
+                        print(f"[Warning] '{reg.name}' is not found in pattern '{pat.name}', use default value.")
                         reg_val = reg.init_val
                     else:
                         try:
                             reg_val = str2int(pat.regs[reg.name], reg.is_signed, bits)
                         except Exception as e:
-                            print("-" * 60)
+                            print('-' * 60)
                             print("RegisterValueError:")
                             print("pattern:  {}".format(pat.name))
                             print("register: {}".format(reg.name))
-                            print("-" * 60)
+                            print('-' * 60)
                             raise e
 
                     row = ws.row_dimensions[reg.row_idx]
@@ -368,18 +430,16 @@ class PatternList(ReferenceTable):
             cell.alignment = copy.copy(row.alignment)
 
             pat_idx += 1
+            pat_cnt += 1
 
-        if pat_out_fp is not None:
-            wb.save(pat_out_fp)
-        else:
-            wb.save(os.path.join('progp_out', 'register.xlsx'))
-
+        wb.save(pat_path)
         wb.close()
+        print(f"\n=== Number of pattern generated: {pat_cnt}\n")
     #}}}
 
     def export_table_db(self, db_fp):
         """Export reference table dtabase (pickle type)"""  #{{{
-        with open(db_fp, "wb") as f:
+        with open(db_fp, 'wb') as f:
             pickle.dump(self.reg_table, f)
             pickle.dump(self.ini_table, f)
     #}}}
@@ -387,11 +447,11 @@ class PatternList(ReferenceTable):
 
 ### Main Function ###
 
-def main(is_debug=False):
+def main():
     """Main function""" #{{{
     parser = argparse.ArgumentParser(
             formatter_class=argparse.RawTextHelpFormatter,
-            description=textwrap.dedent('''
+            description=textwrap.dedent("""
                 Programming Register convertor.
 
                 Convert register setting between ini/hex/excel format use the reference table.
@@ -403,11 +463,11 @@ def main(is_debug=False):
                     
                         Convert a setting from ini to hex by text-style reference table.
 
-                    @: %(prog)s -x table.xlsx ini xls reg.ini
+                    @: %(prog)s -x table.xlsx ini xlsx reg.ini
 
                         Copy excel-style reference table and append a converted setting.
 
-                    @: %(prog)s -X table.xlsx ini xls reg.ini
+                    @: %(prog)s -X table.xlsx ini xlsx reg.ini
 
                         Create an empty excel reference table and append a converted setting.
                         
@@ -425,75 +485,85 @@ def main(is_debug=False):
 
                         Batch mode, convert settings from the 2nd row to the 5th row in the list.
 
-                    @: %(prog)s -x table.xls ini xls <src_list_path> -b -s 6 -e 8
+                    @: %(prog)s -x table.xlsx ini xlsx <src_list_path> -b -s 6 -e 8
 
                         Batch mode, convert settings from the 6th column to 8th column in the excel table.
 
                 Convert between ini/hex with any format of reference table is permitted, but convert
                 to excel format by excel-style reference table is necessary.
-                '''))
+                """))
 
-    parser.add_argument('in_fmt', metavar='format_in', type=str, 
-                                    help='input format (option: ini/hex/xls)') 
-    parser.add_argument('out_fmt', metavar='format_out', type=str, 
-                                    help='output format (option: ini/hex/xls)') 
-    parser.add_argument('pat_in_fp', metavar='pattern_in', type=str, 
-                                    help='input pattern path') 
+    parser.add_argument('in_fmt', metavar='format_in', choices=['ini', 'hex', 'xlsx'],
+                                    help="input format (choices: ini/hex/xlsx)") 
+    parser.add_argument('out_fmt', metavar='format_out', choices=['ini', 'hex', 'xlsx'], 
+                                    help="output format (choices: ini/hex/xlsx)") 
+    parser.add_argument('pat_in_fp', metavar='pattern_in',
+                                    help="input pattern path") 
 
-    parser.add_argument('-t', dest='txt_table_fp', metavar='<path>', type=str, 
-                                help='use text-style reference table')
-    parser.add_argument('-x', dest='xls_table_fp', metavar='<path>', type=str,
-                                help=textwrap.dedent('''\
-                                use excel-style reference table 
-                                (copy current table when excel out)'''))
-    parser.add_argument('-X', dest='xls_table_fp2', metavar='<path>', type=str,
-                                help=textwrap.dedent('''\
-                                use excel-style reference table 
-                                (create new table when excel out)'''))
-    parser.add_argument('-d', dest='database_fp', metavar='<path>', type=str,
-                                help=textwrap.dedent('''\
-                                use pre-parsed reference table database (pickle type)'''))
+    table_gparser = parser.add_mutually_exclusive_group(required=True)
+    table_gparser.add_argument('-t', dest='txt_table_fp', metavar='<path>',
+                                        help="use text-style reference table")
+    table_gparser.add_argument('-x', dest='xlsx_table_fp', metavar='<path>',
+                                        help=textwrap.dedent("""\
+                                        use excel-style reference table (current table append)"""))
+    table_gparser.add_argument('-X', dest='xlsx_table_fp2', metavar='<path>',
+                                        help=textwrap.dedent("""\
+                                        use excel-style reference table (new table create)"""))
+    # table_gparser.add_argument('-d', dest='database_fp', metavar='<path>',
+    #                                     help=textwrap.dedent("""\
+    #                                     use pre-parsed reference table database (pickle type)"""))
+
+    # parser.add_argument('-p', dest='pickle_out_fp', metavar='<path>',
+    #                             help=textwrap.dedent("""\
+    #                             export reference table database (pickle type)"""))
+
     parser.add_argument('-b', dest='is_batch', action='store_true', 
-                                help='enable batch mode')
+                                help="enable batch mode")
     parser.add_argument('-s', dest='start_id', metavar='<id>', type=int, default=0,
-                                help='start pattern index')
+                                help="start pattern index")
     parser.add_argument('-e', dest='end_id', metavar='<id>', type=int, default=0,
-                                help='end pattern index')
-    parser.add_argument('-o', dest='pat_out_fp', metavar='<path>', type=str,
-                                help=textwrap.dedent('''\
-                                specify output file path 
-                                (ignore when ini/hex out at batch mode)'''))
-    parser.add_argument('-O', dest='force_pat_out_fp', metavar='<path>', type=str,
-                                help=textwrap.dedent('''\
-                                specify output file path 
-                                (force overwrite, ignore when ini/hex out at batch mode)'''))
-    parser.add_argument('-p', dest='pickle_out_fp', metavar='<path>', type=str,
-                                help=textwrap.dedent('''\
-                                export reference table database (pickle type)'''))
+                                help="end pattern index")
 
-    args = parser.parse_args()
+    parser.add_argument('-f', dest='is_force', action='store_true', 
+                                    help="force write with custom pattern dump")
+    parser.add_argument('--dir', dest='cus_dir', metavar='<path>',
+                                    help="custom dump directory")
+    parser.add_argument('--pat', dest='cus_pat', metavar='<path>',
+                                    help="custom dump pattern name")
+    parser.add_argument('--ext', dest='cus_ext', metavar='<ext>',
+                                    help="custom dump file extension (excel ignore)")
+
+    args, args_dbg = parser.parse_known_args()
+
+    parser_dbg = argparse.ArgumentParser()
+    parser_dbg.add_argument('--dbg', dest='debug_mode', metavar='<pattern>',
+                                        help="debug mode (tag: t/p)")
+
+    args_dbg = parser_dbg.parse_known_args(args_dbg)[0]
+
+    debug_mode = set()
+    try:
+        for i in range(len(args_dbg.debug_mode)):
+            debug_mode.add(args_dbg.debug_mode[i])
+    except Exception:
+        pass
 
     ## Parser register table
 
-    pat_list = None
-    is_init = False
-    if args.txt_table_fp is not None:
-        pat_list = PatternList(args.txt_table_fp, 'txt', is_debug)
-    elif args.xls_table_fp is not None:
-        pat_list = PatternList(args.xls_table_fp, 'xls', is_debug)
-    elif args.xls_table_fp2 is not None:
-        pat_list = PatternList(args.xls_table_fp2, 'xls', is_debug)
-        is_init = True
-    elif args.database_fp is not None:
-        pat_list = PatternList(args.database_fp, 'db', is_debug)
-    else:
-        raise TypeError("missing the register table (please set -c or -x or -X)")
+    if args.txt_table_fp:
+        pat_list = PatternList(args.txt_table_fp, 'txt', debug_mode)
+    elif args.xlsx_table_fp:
+        pat_list = PatternList(args.xlsx_table_fp, 'xlsx', debug_mode)
+    elif args.xlsx_table_fp2:
+        pat_list = PatternList(args.xlsx_table_fp2, 'xlsx', debug_mode)
+    # else:
+    #     pat_list = PatternList(args.database_fp, 'db', debug_mode)
 
     ## Only dump reference table database
 
-    if args.pickle_out_fp is not None:
-        pat_list.export_table_db(args.pickle_out_fp)
-        return 0
+    # if args.pickle_out_fp:
+    #     pat_list.export_table_db(args.pickle_out_fp)
+    #     return 0
 
     ## Parse input pattern
 
@@ -501,51 +571,58 @@ def main(is_debug=False):
         pat_list.ini_parser(args.pat_in_fp, args.is_batch, args.start_id, args.end_id) 
     elif args.in_fmt == 'hex':
         pat_list.hex_parser(args.pat_in_fp, args.is_batch, args.start_id, args.end_id)
-    elif args.in_fmt == 'xls':
-        # if args.xls_table_fp is None and args.xls_table_fp2 is None:
-        #     raise TypeError('need an excel register table when input excel file')
-        pat_list.xls_parser(args.pat_in_fp, args.is_batch, args.start_id, args.end_id)
     else:
-        raise ValueError(f"unknown input type ({args.in_fmt})")
+        pat_list.xlsx_parser(args.pat_in_fp, args.is_batch, args.start_id, args.end_id)
 
     ## Dump pattern
 
-    pat_out_fp = None
-    if (args.is_batch and args.out_fmt != 'xls') or \
-       (args.force_pat_out_fp is None and args.pat_out_fp is None):
-        if os.path.isfile('progp_out'):
-            os.remove('progp_out')
-        elif os.path.isdir('progp_out'):
-            shutil.rmtree('progp_out')
-        os.mkdir('progp_out')
+    if not args.cus_dir:
+        pat_dir = Path('progp_out')
+        if pat_dir.exists():
+            shutil.rmtree(pat_dir) if pat_dir.is_dir() else pat_dir.unlink()
+        pat_dir.mkdir()
     else:
-        if args.force_pat_out_fp is not None:
-            pat_out_fp = args.force_pat_out_fp
+        if not args.is_batch or args.out_fmt == 'xlsx':
+            if (pat_dir := Path(args.cus_dir)).resolve() != Path().resolve():
+                if pat_dir.exists():
+                    if not args.is_force and input("output directory existed, overwrite? (y/n) ").lower() != 'y':
+                        print('Terminated')
+                        exit(0)
+                    shutil.rmtree(pat_dir) if pat_dir.is_dir() else pat_dir.unlink()
+                pat_dir.mkdir()
         else:
-            pat_out_fp = args.pat_out_fp
-            if os.path.exists(args.pat_out_fp):
-                ret = input("File existed, overwrite? (y/n) ")
-                if ret.lower() == 'y':
-                    os.remove(pat_out_fp)
-                else:
+            if (pat_dir := Path(args.cus_dir)).resolve() == Path().resolve():
+                print("[Error] custom dump directory can't be '.' in the batch mode.")
+                exit(1)
+            if pat_dir.exists():
+                if not args.is_force and input("output directory existed, overwrite? (y/n) ").lower() != 'y':
                     print('Terminated')
-                    exit(1)
+                    exit(0)
+                shutil.rmtree(pat_dir) if pat_dir.is_dir() else pat_dir.unlink()
+            pat_dir.mkdir()
+
+    pat_name = args.cus_pat if args.cus_pat else None
+
+    try:
+        pat_ext = '.' + args.cus_ext.split('.')[-1]
+    except Exception:
+        pat_ext = None
 
     if args.out_fmt == 'ini':
-        pat_list.ini_dump(pat_out_fp)
+        pat_list.ini_dump(pat_dir, pat_name, pat_ext, args.is_force)
     elif args.out_fmt == 'hex':
-        pat_list.hex_dump(pat_out_fp)
-    elif args.out_fmt == 'xls':
-        if args.xls_table_fp is not None:
-            pat_list.xls_dump(args.xls_table_fp, pat_out_fp, is_init)
-        elif args.xls_table_fp2 is not None:
-            pat_list.xls_dump(args.xls_table_fp2, pat_out_fp, is_init)
+        pat_list.hex_dump(pat_dir, pat_name, pat_ext, args.is_force)
+    else:
+        is_init = True if args.xlsx_table_fp2 else False
+
+        if args.xlsx_table_fp:
+            pat_list.xlsx_dump(args.xlsx_table_fp, pat_dir, pat_name, args.is_force, is_init)
+        elif args.xlsx_table_fp2:
+            pat_list.xlsx_dump(args.xlsx_table_fp2, pat_dir, pat_name, args.is_force, is_init)
         else:
             raise TypeError("need an excel register table when output excel file")
-    else:
-        raise ValueError(f"unknown output type ({args.out_fmt})")
 #}}}
 
 if __name__ == '__main__':
-    sys.exit(main(False))
+    sys.exit(main())
 
