@@ -271,7 +271,7 @@ class PatternList(ReferenceTable):
                                 print("pattern:  {}".format(pat.name))
                                 print("register: {}".format(reg.name))
                                 print('-' * 60)
-                                raise e
+                                raise SyntaxError("RegisterValueError") 
 
                             if reg.name in self.hex_out:
                                 if reg_val > 0xffff:
@@ -338,7 +338,7 @@ class PatternList(ReferenceTable):
                                         print("pattern:  {}".format(pat.name))
                                         print("register: {}".format(reg.name))
                                         print('-' * 60)
-                                        raise e
+                                        raise SyntaxError("RegisterValueError") 
                                 else:
                                     print(f"[Warning] '{reg.name.lower()}' is not found in pattern '{pat.name}', use default value.")
                                     reg_val = reg.init_val
@@ -348,7 +348,9 @@ class PatternList(ReferenceTable):
                             word_val += (reg_val & mask) << reg.lsb
 
                         f.write("{:04x}{:08x}\n".format(addr, word_val))
-                    except Exception:
+                    except Exception as e:
+                        if str(e) == 'RegisterValueError':
+                            raise e
                         f.write("{:04x}{:08x}\n".format(addr, 0))
             pat_cnt += 1
         print()
@@ -410,7 +412,7 @@ class PatternList(ReferenceTable):
                             print("pattern:  {}".format(pat.name))
                             print("register: {}".format(reg.name))
                             print('-' * 60)
-                            raise e
+                            raise SyntaxError("RegisterValueError") 
 
                     row = ws.row_dimensions[reg.row_idx]
                     cell = ws.cell(reg.row_idx, pat_idx, hex(reg_val & mask).upper()[2:])
