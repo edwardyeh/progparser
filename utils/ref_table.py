@@ -560,10 +560,13 @@ class ReferenceTable:
         for ini_grp in self.ini_table:
             print(f"Tag: {ini_grp.tag}")
             for reg in ini_grp.regs:
-                print("  {} = {}".format(
-                        reg.name.ljust(ini_grp.max_len),
-                        reg.init_val))
-                reg_cnt += 1
+                if reg.name == '===':
+                    print("  ===")
+                else:
+                    print("  {} = {}".format(
+                            reg.name.ljust(ini_grp.max_len),
+                            reg.init_val))
+                    reg_cnt += 1
 
         print(f"\nregister count: {reg_cnt}\n")
     #}}}

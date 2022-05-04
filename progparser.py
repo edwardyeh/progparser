@@ -218,7 +218,7 @@ class PatternList(ReferenceTable):
         wb.close()
     #}}}
 
-    def ini_dump(self, pat_dir, pat_name=None, pat_ext=None, is_force=False):
+    def ini_dump(self, pat_dir, pat_name=None, pat_ext=None, is_force=False, info_dump=True):
         """Dump pattern with ini format""" #{{{
         if not pat_ext:
             pat_ext = '.ini'
@@ -289,13 +289,15 @@ class PatternList(ReferenceTable):
                             else:
                                 f.write("\n")
             pat_cnt += 1
-        print()
-        print(f"=== Number of pattern generated: {pat_cnt - pat_ignore}")
-        print(f"=== Number of pattern ignored:   {pat_ignore}")
-        print()
+
+        if info_dump:
+            print()
+            print(f"=== Number of pattern generated: {pat_cnt - pat_ignore}")
+            print(f"=== Number of pattern ignored:   {pat_ignore}")
+            print()
     #}}}
 
-    def hex_dump(self, pat_dir, pat_name=None, pat_ext=None, is_force=False):
+    def hex_dump(self, pat_dir, pat_name=None, pat_ext=None, is_force=False, info_dump=True):
         """Dump pattern with hex format"""  #{{{
         if not pat_ext:
             pat_ext = '.pat'
@@ -353,13 +355,15 @@ class PatternList(ReferenceTable):
                             raise e
                         f.write("{:04x}{:08x}\n".format(addr, 0))
             pat_cnt += 1
-        print()
-        print(f"=== Number of pattern generated: {pat_cnt - pat_ignore}")
-        print(f"=== Number of pattern ignored:   {pat_ignore}")
-        print()
+
+        if info_dump:
+            print()
+            print(f"=== Number of pattern generated: {pat_cnt - pat_ignore}")
+            print(f"=== Number of pattern ignored:   {pat_ignore}")
+            print()
     #}}}
 
-    def xlsx_dump(self, ref_fp : str, pat_dir, pat_name=None, is_force=False, is_init=False):
+    def xlsx_dump(self, ref_fp : str, pat_dir, pat_name=None, is_force=False, is_init=False, info_dump=True):
         """Dump pattern with excel format""" #{{{
         pname = pat_name if pat_name else 'register'
         pat_path = pat_dir / (pname + '.xlsx')
@@ -440,7 +444,9 @@ class PatternList(ReferenceTable):
 
         wb.save(pat_path)
         wb.close()
-        print(f"\n=== Number of pattern generated: {pat_cnt}\n")
+
+        if info_dump:
+            print(f"\n=== Number of pattern generated: {pat_cnt}\n")
     #}}}
 
     def export_table_db(self, db_fp):
