@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .progparser import Pat, PatternList
 
-sys.path.append('.')
+sys.path.insert(0, '')
 
 try:
     import batchg_define as bd
