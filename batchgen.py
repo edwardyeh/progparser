@@ -6,6 +6,7 @@
 #
 import argparse
 import copy
+import os
 import shutil
 import sys
 import textwrap
@@ -13,10 +14,13 @@ from pathlib import Path
 
 from .progparser import Pat, PatternList
 
+sys.path.append('.')
+
 try:
-    import pattern_define as pat_def
+    import batchg_define as bd
 except ModuleNotFoundError:
-    print("ModuleNotFoundError: Please create 'pattern_define' module in current directory")
+    print("ModuleNotFoundError: Please create 'batchg_define' module in current directory")
+    exit(1)
 
 ### Class Definition ###
 
@@ -91,8 +95,8 @@ def main():
     #                                     help=textwrap.dedent("""\
     #                                     use excel-style reference table (new table create)"""))
 
-    # parser.add_argument('-f', dest='is_force', action='store_true', 
-    #                                 help="force write with custom pattern dump")
+    parser.add_argument('--dir', dest='cus_dir', metavar='<path>',
+                                    help="custom dump directory")
 
     args, args_dbg = parser.parse_known_args()
 
@@ -118,11 +122,14 @@ def main():
     elif args.xlsx_table_fp2:
         batch_gen = BatchPatGen(args.xlsx_table_fp2, 'xlsx', debug_mode)
 
-    bat_dir = Path('batch_pattern')
-    if bat_dir.exists():
-        shutil.rmtree(bat_dir) if bat_dir.is_dir() else bat_dir.unlink()
+    if args.cus_dir is not None:
+        bat_dir = Path(args.cus_dir)
+    else:
+        bat_dir = Path('batchg_out')
+        if bat_dir.exists():
+            shutil.rmtree(bat_dir) if bat_dir.is_dir() else bat_dir.unlink()
 
-    for test_plan, is_active in pat_def.pat_grp:
+    for test_plan, is_active in bd.pat_grp:
         if is_active:
             ## Pattern generate
             mod_pat_list = test_plan.pat_gen()
@@ -139,11 +146,14 @@ def main():
 
             for pat_name, _ in mod_pat_list:
                 out_dir = bat_dir / pat_name
-                shutil.copytree(ref_dir, out_dir)
+                if out_dir.exists():
+                    shutil.rmtree(out_dir) if out_dir.is_dir() else out_dir.unlink()
+                shutil.copytree(ref_dir, out_dir, symlinks=True)
                 Path(out_dir, test_plan.REF_INI).unlink()
                 shutil.copy(pat_dir / f"{pat_name}.pat", out_dir / test_plan.OUT_PAT)
 
             shutil.rmtree(pat_dir)
+            print(f"[INFO] {test_plan.__name__} generated.")
 
 #}}}
 
