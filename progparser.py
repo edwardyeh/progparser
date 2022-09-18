@@ -486,10 +486,6 @@ def main():
                         
                 Multi-source Examples:
 
-                    @: %(prog)s -t table.txt ini hex <src_list_path> -s 2
-
-                        Single mode, convert the setting at the 2nd row in the list.
-
                     @: %(prog)s -t table.txt ini hex <src_list_path> -b
 
                         Batch mode, convert all settings in the list.
@@ -498,11 +494,11 @@ def main():
 
                         Batch mode, convert settings from the 2nd row to the 5th row in the list.
 
-                    @: %(prog)s -x table.xlsx ini xlsx <src_list_path> -b -s 6 -e 8
+                    @: %(prog)s -t table.txt xlsx ini <excel_pat_list> -b -s 6 -e 8
 
                         Batch mode, convert settings from the 6th column to 8th column in the excel table.
 
-                Convert between ini/hex with any format of reference table is permitted, but convert
+                Convert to ini/hex with any format of reference table is permitted, but convert
                 to excel format by excel-style reference table is necessary.
                 """))
 
