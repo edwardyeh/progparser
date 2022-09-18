@@ -11,6 +11,8 @@ import openpyxl
 import sys
 from openpyxl.styles import Font
 
+from .utils.general import PROG_VERSION
+
 ### Function ###
 
 def mask_rsv_reg(table_fp):
@@ -42,6 +44,7 @@ def main():
                 Mark reserved registers in the excel-style table.
                 """))
 
+    parser.add_argument('--version', action='version', version=PROG_VERSION)
     parser.add_argument('table_fp', metavar='table_in', help="reference table in")
     args = parser.parse_args()
     mask_rsv_reg(args.table_fp)

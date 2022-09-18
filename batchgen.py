@@ -12,6 +12,7 @@ import sys
 import textwrap
 from pathlib import Path
 
+from .utils.general import PROG_VERSION
 from .progparser import Pat, PatternList
 
 sys.path.insert(0, '')
@@ -82,8 +83,7 @@ def main():
                 Batch generator of simulation patterns.
                 """))
 
-    # parser.add_argument('out_fmt', metavar='format_out', choices=['ini', 'hex', 'xlsx'], 
-    #                                 help="output format (choices: ini/hex/xlsx)") 
+    parser.add_argument('--version', action='version', version=PROG_VERSION)
 
     table_gparser = parser.add_mutually_exclusive_group(required=True)
     table_gparser.add_argument('-t', dest='txt_table_fp', metavar='<path>',

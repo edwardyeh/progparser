@@ -9,6 +9,7 @@ import argparse
 import sys
 import textwrap
 
+from .utils.general import PROG_VERSION
 from .utils.ref_table import ReferenceTable
 
 ### Class Definition ###
@@ -136,6 +137,8 @@ def main():
             description=textwrap.dedent('''
                 Programming reference table comparer.
                 '''))
+
+    parser.add_argument('--version', action='version', version=PROG_VERSION)
 
     parser.add_argument('l_type', metavar='left_type', choices=['txt', 'xlsx'], 
                                     help="left table type (option: txt/xlsx)") 

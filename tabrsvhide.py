@@ -10,6 +10,8 @@ import textwrap
 import openpyxl
 import sys
 
+from .utils.general import PROG_VERSION
+
 ### Function ###
 
 def hide_rsv_reg(table_fp):
@@ -36,6 +38,7 @@ def main():
                 Hide reserved registers in the excel-style table.
                 """))
 
+    parser.add_argument('--version', action='version', version=PROG_VERSION)
     parser.add_argument('table_fp', metavar='table_in', help="reference table in")
     args = parser.parse_args()
     hide_rsv_reg(args.table_fp)

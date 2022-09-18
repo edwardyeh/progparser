@@ -1,0 +1,34 @@
+v0.1.0.rc1      
+
+    1. Initial version.
+
+v0.2.0.rc1 
+
+    1. Refactor data structures.
+    2. Support pickle mode.
+    3. Support negative register value.
+    4. Support register dump by hex value.
+    5. Add a new module 'tabrsvhide'.
+
+v0.3.0 
+    
+    1. Refine and add features to current modules.
+    2. Add a new module 'tabdiff'.
+    3. Add a new module 'tabrsvmask'.
+
+v0.4.0
+    
+    1. Add CLI for win32.
+
+v0.5.0
+    
+    1. Add a new module 'batchgen'.
+
+v0.5.1 
+
+    1. Refine the module 'batchgen'.
+
+v0.5.2
+
+    1. Add version argument for all applications.
+    2. Create CHANGE list.

@@ -5,6 +5,9 @@
 """
 General function set
 """
+
+PROG_VERSION = 'v0.5.2'
+
 def str2int(str_: str, is_signed: bool=False, bits: int=32) -> int:
     """Convert string to integer (with HEX check)"""  #{{{
     if str_.startswith('0x') or str_.startswith('0X') :

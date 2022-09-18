@@ -9,6 +9,7 @@ import argparse
 import sys
 import textwrap
 
+from .utils.general import PROG_VERSION
 from .utils.ref_table import ReferenceTable
 
 ### Class Definition ###
@@ -38,6 +39,8 @@ def main():
             description=textwrap.dedent("""
                 Programming register table converter.
                 """))
+
+    parser.add_argument('--version', action='version', version=PROG_VERSION)
 
     parser.add_argument('in_type', metavar='input_type', choices=['txt', 'xlsx'],
                                     help="input type (option: txt/xlsx)") 

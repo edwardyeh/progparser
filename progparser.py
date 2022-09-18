@@ -17,6 +17,7 @@ from typing import NamedTuple
 
 import openpyxl
 
+from .utils.general import PROG_VERSION
 from .utils.general import str2int
 from .utils.ref_table import ReferenceTable
 
@@ -511,6 +512,8 @@ def main():
                                     help="output format (choices: ini/hex/xlsx)") 
     parser.add_argument('pat_in_fp', metavar='pattern_in',
                                     help="input pattern path") 
+
+    parser.add_argument('--version', action='version', version=PROG_VERSION)
 
     table_gparser = parser.add_mutually_exclusive_group(required=True)
     table_gparser.add_argument('-t', dest='txt_table_fp', metavar='<path>',
