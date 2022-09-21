@@ -48,5 +48,5 @@ class TestPlan2:
 
 pat_grp = [
     (TestPlan1, True),
-    (TestPlan2, False)
+    (TestPlan2, True)
 ]

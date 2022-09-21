@@ -142,7 +142,9 @@ def main():
             if pat_dir.exists():
                 shutil.rmtree(pat_dir) if pat_dir.is_dir() else pat_dir.unlink()
             pat_dir.mkdir()
+            batch_gen.ini_dump(pat_dir, info_dump=False)
             batch_gen.hex_dump(pat_dir, info_dump=False)
+            out_ini_fp = Path(test_plan.OUT_PAT).stem + '.ini'
 
             for pat_name, _ in mod_pat_list:
                 out_dir = bat_dir / pat_name
@@ -150,6 +152,7 @@ def main():
                     shutil.rmtree(out_dir) if out_dir.is_dir() else out_dir.unlink()
                 shutil.copytree(ref_dir, out_dir, symlinks=True)
                 Path(out_dir, test_plan.REF_INI).unlink()
+                shutil.copy(pat_dir / f"{pat_name}.ini", out_dir / out_ini_fp)
                 shutil.copy(pat_dir / f"{pat_name}.pat", out_dir / test_plan.OUT_PAT)
 
             shutil.rmtree(pat_dir)
