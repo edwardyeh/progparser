@@ -27,6 +27,18 @@ group2_var2_signed      0x14    31  16  s   y   0xffec  # s: signed register, u:
 group2_var3_hide1       0x18    15  0   u   n   0x0
 group2_var3_hide2       0x18    31  16  u   n   0x0
 
+# String descriptor format: <reg_name> str <init_val>
+# float descriptor format: <reg_name> float <init_val> "<reg_description>"
+# Integer descriptor format: <reg_name> int <msb> <lsb> <sign> <init_val> "<reg_description>"
+
+T: System
+
+sys_file_path           str     "./rand_image_4k.raw"   # string and float doesn't support hex value
+sys_var_flt1            float   2.554                   # string and float doesn't support hex out descriptor
+sys_var_flt2            float   -3.1695                 # float is always signed
+sys_var_int1            int     7   0   u   200         # string/float/integer descriptor is always access
+sys_var_int2            int     7   0   s   -100
+
 ### Use hex out descriptor to dump hex-type value in ini-style reg dump process ###
 
 H: group2_addr_var1     # hex out descriptor format:  H: <reg_name>

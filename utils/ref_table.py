@@ -5,40 +5,41 @@
 """
 Reference table for register parsing
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from .general import str2int 
 
-@dataclass
+@dataclass (slots=True)
 class Reg:
 ##{{{
-    name: str
-    addr: int
-    msb: int
-    lsb: int
-    is_signed: bool
+    name:      str
+    type:      str
+    init_val:  None
     is_access: bool
-    init_val: int
-    comment: str
-    row_idx: int
+    addr:      int  = None
+    msb:       int  = None
+    lsb:       int  = None
+    is_signed: bool = None
+    comment:   str  = None
+    row_idx:   int  = None
 ##}}}
 
-@dataclass
+@dataclass (slots=True)
 class RegList:
 #{{{
-    title: str
-    regs: list
+    title: str  = None
+    regs:  list = field(default_factory=list)
 #}}}
 
-@dataclass
+@dataclass (slots=True)
 class INIGroup:
 #{{{ 
-    tag: str
-    max_len: int
-    regs: list
+    tag:     str
+    max_len: int  = 0
+    regs:    list = field(default_factory=list)
 #}}}
 
 class ReferenceTable:
@@ -68,7 +69,7 @@ class ReferenceTable:
                     elif toks[0] == 'T:':
                         try:
                             tag_name = ' '.join(toks[1:]).split('#')[0].strip("\"\' ")
-                            self.ini_table.append(INIGroup(tag_name, 0, []))
+                            self.ini_table.append(INIGroup(tag_name))
                         except Exception as e:
                             print('-' * 60)
                             print("TableParseError: (line: {})".format(line_no))
@@ -79,7 +80,7 @@ class ReferenceTable:
                     elif toks[0] == 'A:':
                         try:
                             addr = str2int(toks[1])
-                            reg_list = self.reg_table.setdefault(addr, RegList(None, []))
+                            reg_list = self.reg_table.setdefault(addr, RegList())
                             if len(toks) > 2:
                                 reg_list.title = ' '.join(toks[2:]).split('#')[0].strip("\"\' ")
                             else:
@@ -97,38 +98,80 @@ class ReferenceTable:
                                 break
                             self.hex_out.add(reg.upper())
                     elif toks[0] == '===':
-                        ini_grp.regs.append(Reg('===', *[None]*8))
+                        ini_grp.regs.append(Reg('===', *[None]*3))
                     else:
-                        try:
-                            reg_name = toks[0].upper()
-                            addr = str2int(toks[1])
-                            msb = str2int(toks[2])
-                            lsb = str2int(toks[3])
-                            is_signed = self.sign_check(toks[4])
-                            is_access = self.access_check(toks[5])
-                            init_val = str2int(toks[6], is_signed, msb - lsb + 1)
-                            if len(toks) > 7:
-                                comment = ' '.join(toks[7:])
-                                comment = None if comment[0] == '#' else\
-                                            comment.split('#')[0].strip("\"\' ")
-                            else:
-                                comment = None
-                        except Exception as e:
-                            print('-' * 70)
-                            print("TableParseError: (line: {})".format(line_no))
-                            print("syntax of register descriptor:")
-                            print("  '<name> <addr> <msb> <lsb> <sign_type> <is_access> <init_val> [comment]'")
-                            print('-' * 70)
-                            raise e
+                        reg_name = toks[0].upper()
+                        if toks[1] == 'str':
+                            try:
+                                init_val = ' '.join(toks[2:])
+                                if init_val[0] == '#':
+                                    raise e
+                                else:
+                                    init_val = init_val.split('#')[0].strip("\"\' ")
 
-                        reg = Reg(reg_name, addr, msb, lsb, is_signed, is_access, init_val, comment, None)
-                        reg_list = self.reg_table.setdefault(addr, RegList(None, []))
-                        reg_list.regs.append(reg)
+                                reg = Reg(reg_name, 'str', init_val, True)
+                            except Exception as e:
+                                print('-' * 70)
+                                print("TableParseError: (line: {})".format(line_no))
+                                print("syntax of string descriptor:")
+                                print("  '<name> str <init_val> [comment]'")
+                                print('-' * 70)
+                                raise e
+                        elif toks[1] == 'float':
+                            try:
+                                comment = None if len(toks) < 4 else self.txt_get_comment(' '.join(toks[3:]))
+                                reg = Reg(reg_name, 'float', float(toks[2]), True, comment=comment)
+                            except Exception as e:
+                                print('-' * 70)
+                                print("TableParseError: (line: {})".format(line_no))
+                                print("syntax of float descriptor:")
+                                print("  '<name> float <init_val> [comment]'")
+                                print('-' * 70)
+                                raise e
+                        elif toks[1] == 'int':
+                            try:
+                                msb = str2int(toks[2])
+                                lsb = str2int(toks[3])
+                                is_signed = self.sign_check(toks[4])
+                                init_val = str2int(toks[5], is_signed, msb - lsb + 1)
+                                comment = None if len(toks) < 7 else self.txt_get_comment(' '.join(toks[6:]))
+
+                                reg = Reg(reg_name, 'int', init_val, True, msb=msb, lsb=lsb, 
+                                            is_signed=is_signed, comment=comment)
+                            except Exception as e:
+                                print('-' * 70)
+                                print("TableParseError: (line: {})".format(line_no))
+                                print("syntax of int descriptor:")
+                                print("  '<name> int <msb> <lsb> <sign_type> <init_val> [comment]'")
+                                print('-' * 70)
+                                raise e
+                        else:
+                            try:
+                                addr = str2int(toks[1])
+                                msb = str2int(toks[2])
+                                lsb = str2int(toks[3])
+                                is_signed = self.sign_check(toks[4])
+                                is_access = self.access_check(toks[5])
+                                init_val = str2int(toks[6], is_signed, msb - lsb + 1)
+                                comment = None if len(toks) < 8 else self.txt_get_comment(' '.join(toks[7:]))
+
+                                reg = Reg(reg_name, 'reg', init_val, is_access, addr=addr, msb=msb, lsb=lsb, 
+                                            is_signed=is_signed, comment=comment)
+
+                                reg_list = self.reg_table.setdefault(addr, RegList())
+                                reg_list.regs.append(reg)
+                            except Exception as e:
+                                print('-' * 70)
+                                print("TableParseError: (line: {})".format(line_no))
+                                print("syntax of register descriptor:")
+                                print("  '<name> <addr> <msb> <lsb> <sign_type> <is_access> <init_val> [comment]'")
+                                print('-' * 70)
+                                raise e
 
                         if len(self.ini_table):
                             ini_grp = self.ini_table[-1]
                         else:
-                            ini_grp = INIGroup(None, 0, [])
+                            ini_grp = INIGroup(None)
                             self.ini_table.append(ini_grp)
 
                         reg_len = len(reg_name)
@@ -175,7 +218,7 @@ class ReferenceTable:
                     title = ws.cell(row_idx, 2).value
                     if title is not None:
                         title = str(title).strip()
-                    reg_list = RegList(title, [])
+                    reg_list = RegList(title=title)
                     self.reg_table[addr] = reg_list
 
             try:
@@ -202,13 +245,16 @@ class ReferenceTable:
                 is_access = ws.cell(row_idx, 5).font.__getattr__('color').rgb.lower() != 'ff808080'
             except Exception:
                 is_access = True
-            reg = Reg(reg_name, addr, msb, lsb, is_signed, is_access, init_val, comment, row_idx)
+
+            reg = Reg(reg_name, 'reg', init_val, is_access, addr=addr, msb=msb, lsb=lsb, is_signed=is_signed,
+                        comment=comment, row_idx=row_idx)
+
             reg_list.regs.append(reg)
 
             if len(self.ini_table):
                 ini_grp = self.ini_table[-1]
             else:
-                ini_grp = INIGroup(None, 0, [])
+                ini_grp = INIGroup(None)
                 self.ini_table.append(ini_grp)
 
             reg_len = len(reg_name)
@@ -418,7 +464,8 @@ class ReferenceTable:
             if addr in self.reg_table:
                 reg_list = self.reg_table[addr]
             elif is_rsv_ext:
-                reg_list = RegList('reserved', [Reg('RESERVED', addr, 31, 0, False, False, 0, None, None)])
+                reg_list = RegList(title='reserved', regs=[Reg('RESERVED', 'reg', 0, False, addr=addr, msb=31, lsb=0, 
+                                                is_signed=False)])
             else:
                 continue
 
@@ -537,9 +584,14 @@ class ReferenceTable:
             raise SyntaxError("access flag must be 'y' or 'n'")
     #}}}
 
+    def txt_get_comment(self, str_: str) -> str:
+        """Get register comment"""  #{{{
+        return None if str_[0] == '#' else str_.split('#')[0].strip("\"\' ")
+    #}}}
+
     def show_reg_table(self, msg: str):
         """Show register table"""  #{{{
-        print(msg)
+        print(msg, '\n')
         reg_cnt = 0
         for addr, reg_list in self.reg_table.items():
             print(f"Addr: {addr:#06x} Title: {reg_list.title}")
@@ -555,7 +607,7 @@ class ReferenceTable:
 
     def show_ini_table(self, msg: str):
         """Show ini table"""  #{{{
-        print(msg)
+        print(msg, '\n')
         reg_cnt = 0
         for ini_grp in self.ini_table:
             print(f"Tag: {ini_grp.tag}")

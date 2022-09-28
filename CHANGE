@@ -40,3 +40,9 @@ v0.5.3
 v0.5.4
 
     1. batchgen: Add ini dump.
+
+v0.6.0
+
+    1. progparser: Reference table support non-address type reg.
+    2. batchgen:   Support only ini/hex output mode.
+

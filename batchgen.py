@@ -97,6 +97,8 @@ def main():
 
     parser.add_argument('--dir', dest='cus_dir', metavar='<path>',
                                     help="custom dump directory")
+    parser.add_argument('--only', dest='only_type', metavar='<type>', choices=['ini', 'hex'],
+                                    help="input format (choices: ini/hex/xlsx)") 
 
     args, args_dbg = parser.parse_known_args()
 
@@ -129,6 +131,8 @@ def main():
         if bat_dir.exists():
             shutil.rmtree(bat_dir) if bat_dir.is_dir() else bat_dir.unlink()
 
+    bat_dir.mkdir()
+
     for test_plan, is_active in bd.pat_grp:
         if is_active:
             ## Pattern generate
@@ -146,14 +150,23 @@ def main():
             batch_gen.hex_dump(pat_dir, info_dump=False)
             out_ini_fp = Path(test_plan.OUT_PAT).stem + '.ini'
 
-            for pat_name, _ in mod_pat_list:
-                out_dir = bat_dir / pat_name
-                if out_dir.exists():
-                    shutil.rmtree(out_dir) if out_dir.is_dir() else out_dir.unlink()
-                shutil.copytree(ref_dir, out_dir, symlinks=True)
-                Path(out_dir, test_plan.REF_INI).unlink()
-                shutil.copy(pat_dir / f"{pat_name}.ini", out_dir / out_ini_fp)
-                shutil.copy(pat_dir / f"{pat_name}.pat", out_dir / test_plan.OUT_PAT)
+            if args.only_type is None:
+                for pat_name, _ in mod_pat_list:
+                    out_dir = bat_dir / pat_name
+                    if out_dir.exists():
+                        shutil.rmtree(out_dir) if out_dir.is_dir() else out_dir.unlink()
+                    shutil.copytree(ref_dir, out_dir, symlinks=True)
+                    Path(out_dir, test_plan.REF_INI).unlink()
+                    shutil.copy(pat_dir / f"{pat_name}.ini", out_dir / out_ini_fp)
+                    shutil.copy(pat_dir / f"{pat_name}.pat", out_dir / test_plan.OUT_PAT)
+            else:
+                if args.only_type == 'ini':
+                    pat_paths = pat_dir.glob('*.ini')
+                else:
+                    pat_paths = pat_dir.glob('*.pat')
+
+                for pat in pat_paths:
+                    shutil.copy(pat, bat_dir)
 
             shutil.rmtree(pat_dir)
             print(f"[INFO] {test_plan.__name__} generated.")

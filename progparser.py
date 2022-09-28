@@ -261,8 +261,13 @@ class PatternList(ReferenceTable):
                         if reg.is_access:
                             try:
                                 if reg.name in pat.regs:
-                                    reg_bits = reg.msb - reg.lsb + 1
-                                    reg_val = str2int(pat.regs[reg.name], reg.is_signed, reg_bits)
+                                    if reg.type == 'str':
+                                        reg_val = pat.regs[reg.name]
+                                    elif reg.type == 'float':
+                                        reg_val = float(pat.regs[reg.name])
+                                    else:
+                                        reg_bits = reg.msb - reg.lsb + 1
+                                        reg_val = str2int(pat.regs[reg.name], reg.is_signed, reg_bits)
                                 else:
                                     print(f"[Warning] '{reg.name.lower()}' is not found in pattern '{pat.name}', use default value.")
                                     reg_val = reg.init_val
@@ -275,12 +280,15 @@ class PatternList(ReferenceTable):
                                 raise SyntaxError("RegisterValueError") 
 
                             if reg.name in self.hex_out:
-                                if reg_val > 0xffff:
-                                    lens = ini_grp.max_len + 16
-                                    f.write(f"{reg.name.lower()} = {reg_val:#010x}".ljust(lens))
-                                else:
+                                mask = (1 << (reg.msb - reg.lsb + 1)) - 1
+                                if -65536 <= reg_val <= 65535:
+                                    reg_val &= 0xffff
                                     lens = ini_grp.max_len + 12
                                     f.write(f"{reg.name.lower()} = {reg_val:#06x}".ljust(lens))
+                                else:
+                                    reg_val &= 0xffffffff
+                                    lens = ini_grp.max_len + 16
+                                    f.write(f"{reg.name.lower()} = {reg_val:#010x}".ljust(lens))
                             else:
                                 lens = ini_grp.max_len + 11
                                 f.write(f"{reg.name.lower()} = {reg_val}".ljust(lens))
