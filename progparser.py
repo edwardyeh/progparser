@@ -87,7 +87,8 @@ class PatternList(ReferenceTable):
                         toks = line.split()
                         try:
                             if len(toks) and toks[1] == '=':
-                                pat_regs[toks[0].upper()] = toks[2]
+                                str_ = ' '.join(toks[2:])
+                                pat_regs[toks[0].upper()] = str_.split('#')[0].strip("\"\' ")
                         except Exception as e:
                             print('-' * 60)
                             print("INIRegParseError: (line: {})".format(line_no))
@@ -262,7 +263,13 @@ class PatternList(ReferenceTable):
                             try:
                                 if reg.name in pat.regs:
                                     if reg.type == 'str':
-                                        reg_val = pat.regs[reg.name]
+                                        match reg.extra:
+                                            case 's':
+                                                reg_val = f"\'{pat.regs[reg.name]}\'"
+                                            case 'd':
+                                                reg_val = f"\"{pat.regs[reg.name]}\""
+                                            case _:
+                                                reg_val = pat.regs[reg.name]
                                     elif reg.type == 'float':
                                         reg_val = float(pat.regs[reg.name])
                                     else:
@@ -270,7 +277,12 @@ class PatternList(ReferenceTable):
                                         reg_val = str2int(pat.regs[reg.name], reg.is_signed, reg_bits)
                                 else:
                                     print(f"[Warning] '{reg.name.lower()}' is not found in pattern '{pat.name}', use default value.")
-                                    reg_val = reg.init_val
+                                    if reg.type == 'str' and reg.extra == 's':
+                                        reg_val = f"\'{reg.init_val}\'" 
+                                    elif reg.type == 'str' and reg.extra == 'd':
+                                        reg_val = f"\"{reg.init_val}\"" 
+                                    else:
+                                        reg_val = reg.init_val
                             except Exception as e:
                                 print('-' * 60)
                                 print("RegisterValueError:")

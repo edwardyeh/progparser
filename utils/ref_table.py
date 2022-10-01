@@ -25,6 +25,7 @@ class Reg:
     is_signed: bool = None
     comment:   str  = None
     row_idx:   int  = None
+    extra:     None = None
 ##}}}
 
 @dataclass (slots=True)
@@ -103,13 +104,14 @@ class ReferenceTable:
                         reg_name = toks[0].upper()
                         if toks[1] == 'str':
                             try:
-                                init_val = ' '.join(toks[2:])
+                                quote_type = toks[2]
+                                init_val = ' '.join(toks[3:])
                                 if init_val[0] == '#':
                                     raise e
                                 else:
                                     init_val = init_val.split('#')[0].strip("\"\' ")
 
-                                reg = Reg(reg_name, 'str', init_val, True)
+                                reg = Reg(reg_name, 'str', init_val, True, extra=quote_type)
                             except Exception as e:
                                 print('-' * 70)
                                 print("TableParseError: (line: {})".format(line_no))
