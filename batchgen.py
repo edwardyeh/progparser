@@ -6,6 +6,7 @@
 #
 import argparse
 import copy
+import glob
 import os
 import shutil
 import sys
@@ -31,10 +32,114 @@ class BatchPatGen(PatternList):
     def __init__(self, table_fp: str, table_type: str, debug_mode: set=None):
         super().__init__(table_fp, table_type, debug_mode)
 
-    def ini_parser(self, ref_fp, mod_pat_list: list):
+    def gen_group_pat(self, test_plan, bat_dir, only_type: str):
         """Pattern parser for INI format"""  #{{{
+        ref_dir = Path(test_plan.REF_DIR)
+        ref_regs = self.read_ini(ref_dir / test_plan.REF_INI)
+        mod_pat_list = test_plan.pat_gen()
+
+        ## Pattern generate
+        self.pat_list = []
+        for pat_name, mod_regs in mod_pat_list.items():
+            pat_regs = copy.deepcopy(ref_regs)
+            for reg_name, value in mod_regs.items():
+                pat_regs[reg_name.upper()] = str(value)
+            self.pat_list.append(Pat(pat_name, pat_regs))
+
+            if 'p' in self.debug_mode:
+                print(f"=== INI READ ({pat_name}) ===")
+                for item in pat_regs.items():
+                    print(item)
+                print()
+
+        ## Dump pattern
+        pat_dir = Path('progp_out')
+        if pat_dir.exists():
+            shutil.rmtree(pat_dir) if pat_dir.is_dir() else pat_dir.unlink()
+        pat_dir.mkdir()
+        self.ini_dump(pat_dir, info_dump=False)
+        self.hex_dump(pat_dir, info_dump=False)
+
+        if only_type is None:
+            out_ini_fp = Path(test_plan.OUT_PAT).stem + '.ini'
+            for pat_name in mod_pat_list.keys():
+                out_dir = bat_dir / pat_name
+                if out_dir.exists():
+                    shutil.rmtree(out_dir) if out_dir.is_dir() else out_dir.unlink()
+                shutil.copytree(ref_dir, out_dir, symlinks=True)
+                Path(out_dir, test_plan.REF_INI).unlink()
+                shutil.copy(pat_dir / f"{pat_name}.ini", out_dir / out_ini_fp)
+                shutil.copy(pat_dir / f"{pat_name}.pat", out_dir / test_plan.OUT_PAT)
+        else:
+            if only_type == 'ini':
+                pat_paths = pat_dir.glob('*.ini')
+            else:
+                pat_paths = pat_dir.glob('*.pat')
+
+            for pat in pat_paths:
+                shutil.copy(pat, bat_dir)
+
+        shutil.rmtree(pat_dir)
+        print(f"[INFO] {test_plan.__name__} generated.")
+    #}}}
+
+    def update_group_pat(self, test_plan, bat_dir, only_type: str):
+        """Parse existed INI pattern and update"""  #{{{
+        ref_dir = Path(test_plan.REF_DIR)
+        mod_pat_list = test_plan.pat_gen()
+
+        ## Pattern generate
+        ref_list = []
+        self.pat_list = []
+        if only_type is None or only_type == 'ini':
+            for ref_fp in glob.glob(test_plan.REF_DIR + '/**/*.ini', recursive=True):
+                pat_name = Path(ref_fp).parts[1] if only_type is None else Path(ref_fp).stem
+                if pat_name in mod_pat_list:
+                    ref_list.append(ref_fp)
+                    pat_regs = self.read_ini(ref_fp)
+                    for reg_name, value in mod_pat_list[pat_name].items():
+                        pat_regs[reg_name.upper()] = str(value)
+                    self.pat_list.append(Pat(pat_name, pat_regs))
+        elif only_type == 'hex':
+            print('[INFO] \'Only hex type\' doesn\'t support in group update mode.')
+            exit(0)
+
+        ## Dump pattern
+        pat_dir = Path('progp_out')
+        if pat_dir.exists():
+            shutil.rmtree(pat_dir) if pat_dir.is_dir() else pat_dir.unlink()
+        pat_dir.mkdir()
+        self.ini_dump(pat_dir, info_dump=False)
+        self.hex_dump(pat_dir, info_dump=False)
+
+        if only_type is None:
+            out_ini_fp = Path(test_plan.OUT_PAT).stem + '.ini'
+            for ref_fp in ref_list:
+                pat_name = Path(ref_fp).parts[1]
+                out_dir = bat_dir / pat_name
+                if out_dir.exists():
+                    shutil.rmtree(out_dir) if out_dir.is_dir() else out_dir.unlink()
+                shutil.copytree(Path(ref_fp).parent, out_dir, symlinks=True)
+                Path(out_dir, test_plan.REF_INI).unlink()
+                shutil.copy(pat_dir / f"{pat_name}.ini", out_dir / out_ini_fp)
+                shutil.copy(pat_dir / f"{pat_name}.pat", out_dir / test_plan.OUT_PAT)
+        else:
+            if only_type == 'ini':
+                pat_paths = pat_dir.glob('*.ini')
+            else:
+                pat_paths = pat_dir.glob('*.pat')
+
+            for pat in pat_paths:
+                shutil.copy(pat, bat_dir)
+
+        shutil.rmtree(pat_dir)
+        print(f"[INFO] {test_plan.__name__} generated.")
+    #}}}
+
+    def read_ini(self, ref_ini) -> dict:
+        """Read INI setting"""  #{{{
         ref_regs = {}
-        with open(ref_fp, 'r') as f:
+        with open(ref_ini, 'r') as f:
             line = f.readline()
             line_no = 1
             while line:
@@ -46,7 +151,8 @@ class BatchPatGen(PatternList):
                     toks = line.split()
                     try:
                         if len(toks) and toks[1] == '=':
-                            ref_regs[toks[0].upper()] = toks[2]
+                            str_ = ' '.join(toks[2:])
+                            ref_regs[toks[0].upper()] = str_.split('#')[0].strip("\"\' ")
                     except Exception as e:
                         print('-' * 60)
                         print("INIRegParseError: (line: {})".format(line_no))
@@ -57,20 +163,8 @@ class BatchPatGen(PatternList):
                 line = f.readline()
                 line_no += 1
 
-        self.pat_list = []
-        for pat_name, mod_regs in mod_pat_list:
-            pat_regs = copy.deepcopy(ref_regs)
-            for reg_name, value in mod_regs.items():
-                pat_regs[reg_name.upper()] = str(value)
-            self.pat_list.append(Pat(pat_name, pat_regs))
-
-            if 'p' in self.debug_mode:
-                print(f"=== INI READ ({pat_name}) ===")
-                for item in pat_regs.items():
-                    print(item)
-                print()
+        return ref_regs
     #}}}
-
 #}}}
 
 ### Main Function ###
@@ -135,41 +229,14 @@ def main():
 
     for test_plan, is_active in bd.pat_grp:
         if is_active:
-            ## Pattern generate
-            mod_pat_list = test_plan.pat_gen()
-            ref_dir = Path(test_plan.REF_DIR)
-            ref_ini = ref_dir / test_plan.REF_INI
-            batch_gen.ini_parser(ref_ini, mod_pat_list)
-
-            ## Dump pattern
-            pat_dir = Path('progp_out')
-            if pat_dir.exists():
-                shutil.rmtree(pat_dir) if pat_dir.is_dir() else pat_dir.unlink()
-            pat_dir.mkdir()
-            batch_gen.ini_dump(pat_dir, info_dump=False)
-            batch_gen.hex_dump(pat_dir, info_dump=False)
-            out_ini_fp = Path(test_plan.OUT_PAT).stem + '.ini'
-
-            if args.only_type is None:
-                for pat_name, _ in mod_pat_list:
-                    out_dir = bat_dir / pat_name
-                    if out_dir.exists():
-                        shutil.rmtree(out_dir) if out_dir.is_dir() else out_dir.unlink()
-                    shutil.copytree(ref_dir, out_dir, symlinks=True)
-                    Path(out_dir, test_plan.REF_INI).unlink()
-                    shutil.copy(pat_dir / f"{pat_name}.ini", out_dir / out_ini_fp)
-                    shutil.copy(pat_dir / f"{pat_name}.pat", out_dir / test_plan.OUT_PAT)
-            else:
-                if args.only_type == 'ini':
-                    pat_paths = pat_dir.glob('*.ini')
+            try:
+                if test_plan.UPD_MOD is True:
+                    batch_gen.update_group_pat(test_plan, bat_dir, args.only_type)
                 else:
-                    pat_paths = pat_dir.glob('*.pat')
+                    batch_gen.gen_group_pat(test_plan, bat_dir, args.only_type)
+            except AttributeError: 
+                batch_gen.gen_group_pat(test_plan, bat_dir, args.only_type)
 
-                for pat in pat_paths:
-                    shutil.copy(pat, bat_dir)
-
-            shutil.rmtree(pat_dir)
-            print(f"[INFO] {test_plan.__name__} generated.")
 
 #}}}
 

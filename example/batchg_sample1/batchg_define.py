@@ -6,41 +6,39 @@
 #
 class TestPlan1:
 #{{{
-    PAT_NAME = "test_plan1"
-    REF_DIR = "batchg_sample"
+    REF_DIR = "batchg_ori"
     REF_INI = "age_reg.ini"
     OUT_PAT = "age_reg.pat"
 
     @classmethod
     def pat_gen(cls) -> list:
-        ## return: [(pat_name, mod_regs), ...]
+        ## return: {pat_name: mod_regs, ...}
         ## mod_regs: {reg_name: value, ...}
-
-        mod_pat_list = []
-        for idx in range(10):
+        pat_name = "test_plan1"
+        mod_pat_list = {}
+        for idx in range(3):
             mod_regs = {}
             mod_regs['group1_var2_2'] = 100 + 10 * idx
-            mod_pat_list.append((f"{cls.PAT_NAME}-{idx}", mod_regs))
+            mod_pat_list[f"{pat_name}-{idx}"] = mod_regs
         return mod_pat_list
 #}}}
 
 class TestPlan2:
 #{{{
-    PAT_NAME = "test_plan2"
-    REF_DIR = "batchg_sample"
+    REF_DIR = "batchg_ori"
     REF_INI = "age_reg.ini"
     OUT_PAT = "age_reg.pat"
 
     @classmethod
     def pat_gen(cls) -> list:
-        ## return: [(pat_name, mod_regs), ...]
+        ## return: {pat_name: mod_regs, ...}
         ## mod_regs: {reg_name: value, ...}
-
-        mod_pat_list = []
-        for idx in range(1, 11):
+        pat_name = "test_plan2"
+        mod_pat_list = {}
+        for idx in range(1, 4):
             mod_regs = {}
             mod_regs['group1_var2_1'] = 200 + 10 * idx
-            mod_pat_list.append((f"{cls.PAT_NAME}-{idx}", mod_regs))
+            mod_pat_list[f"{pat_name}-{idx}"] = mod_regs
         return mod_pat_list
 #}}}
 

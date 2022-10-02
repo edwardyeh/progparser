@@ -46,3 +46,11 @@ v0.6.0
     1. progparser: Reference table support non-address type reg.
     2. batchgen:   Support only ini/hex output mode.
 
+v0.7.0
+
+    1. progparser:
+        1. Fix ini string parse issue if string include space.
+        2. Add string quote type indicate for txt-style reference table.
+    2. batchgen:
+        1. Support group update mode.
+
