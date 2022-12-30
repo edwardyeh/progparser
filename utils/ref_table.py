@@ -386,62 +386,63 @@ class ReferenceTable:
         ws.column_dimensions['D'].width = 10.31
         ws.column_dimensions['E'].width = 41.23
 
-        for i in (1, 2):
+        for i in range(1, 3):
             row = ws.row_dimensions[i]
             row.fill = VIOLET_FILL
             row.border = OUTER_BORDER
             row.alignment = CC_ALIGN
 
-        for i in (3, 4, 5):
+        for i in range(3, 7):
             row = ws.row_dimensions[i]
             row.border = OUTER_BORDER
             row.alignment = CC_ALIGN
 
-        row = ws.row_dimensions[6]
+        row = ws.row_dimensions[7]
         row.fill = GREEN_FILL
         row.border = OUTER_BORDER
         row.alignment = CC_ALIGN
 
-        for row in ws['A1:D5']:
+        for row in ws['A1:D6']:
             for cell in row:
                 cell.border = OUTER_BORDER
                 cell.alignment = CC_ALIGN
 
-        values = ['Chip', 'Eng.', 'Date']
+        values = ['Chip', 'Eng.', 'Date', 'BaseAddr']
         for row, val in enumerate(values, start=2):
             cell = ws.cell(row, 1, val)
             cell.fill = ORANGE_FILL
             cell.border = OUTER_BORDER
             cell.alignment = CC_ALIGN
 
-        values = ['Number', 'FileName', 'Metion1', 'Metion2', 'PatternStatus']
+        values = ['Number', 'FileName', 
+                  'Metion1', 'Metion2', 'Metion3', 'PatternStatus']
         for row, val in enumerate(values, start=1):
             cell = ws.cell(row, 5, val)
             cell.fill = YELLOW_FILL
             cell.border = OUTER_BORDER
             cell.alignment = LC_ALIGN
 
-        cell = ws.cell(6, 1, 'ADDR')
+        cell = ws.cell(7, 1, 'ADDR')
         cell.fill = GREEN_FILL
         cell.border = OUTER_BORDER
         cell.alignment = CC_ALIGN
 
-        cell = ws.cell(6, 2, 'Register')
+        cell = ws.cell(7, 2, 'Register')
         cell.fill = GREEN_FILL 
         cell.border = OUTER_BORDER
         cell.alignment = LC_ALIGN
 
-        cell = ws.cell(6, 3, 'INI')
+        cell = ws.cell(7, 3, 'INI')
         cell.fill = GREEN_FILL
         cell.border = OUTER_BORDER
         cell.alignment = RC_ALIGN
 
-        cell = ws.cell(6, 4, 'Bits')
+        cell = ws.cell(7, 4, 'Bits')
         cell.fill = GREEN_FILL
         cell.border = OUTER_BORDER
         cell.alignment = RC_ALIGN
 
-        cell = ws.cell(6, 5, 'Member')
+        cell = ws.cell(7, 5, 'Member')
         cell.fill = GREEN_FILL
         cell.border = OUTER_BORDER
         cell.alignment = LC_ALIGN
@@ -459,7 +460,7 @@ class ReferenceTable:
 
         # Dump register
 
-        row_st = row_ed = 7
+        row_st = row_ed = 8
         for addr in range(0, max(self.reg_table.keys()) + 4, 4):
             is_first_reg = True
 

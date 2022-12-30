@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Define pattern generator
+# Batch pattern generator
 #
 # Copyright (C) 2022 Yeh, Hsin-Hsien <yhh76227@gmail.com>
 #
@@ -15,14 +15,6 @@ from pathlib import Path
 
 from .utils.general import PROG_VERSION
 from .progparser import Pat, PatternList
-
-sys.path.insert(0, '')
-
-try:
-    import batchg_define as bd
-except ModuleNotFoundError:
-    print("ModuleNotFoundError: Please create 'batchg_define' module in current directory")
-    exit(1)
 
 ### Class Definition ###
 
@@ -39,6 +31,7 @@ class BatchPatGen(PatternList):
         mod_pat_list = test_plan.pat_gen()
 
         ## Pattern generate
+
         self.pat_list = []
         for pat_name, mod_regs in mod_pat_list.items():
             pat_regs = copy.deepcopy(ref_regs)
@@ -53,6 +46,7 @@ class BatchPatGen(PatternList):
                 print()
 
         ## Dump pattern
+
         pat_dir = Path('progp_out')
         if pat_dir.exists():
             shutil.rmtree(pat_dir) if pat_dir.is_dir() else pat_dir.unlink()
@@ -83,12 +77,13 @@ class BatchPatGen(PatternList):
         print(f"[INFO] {test_plan.__name__} generated.")
     #}}}
 
-    def update_group_pat(self, test_plan, bat_dir, only_type: str):
+    def upd_group_pat(self, test_plan, bat_dir, only_type: str):
         """Parse existed INI pattern and update"""  #{{{
         ref_dir = Path(test_plan.REF_DIR)
         mod_pat_list = test_plan.pat_gen()
 
         ## Pattern generate
+
         ref_list = []
         self.pat_list = []
         if only_type is None or only_type == 'ini':
@@ -105,6 +100,7 @@ class BatchPatGen(PatternList):
             exit(0)
 
         ## Dump pattern
+
         pat_dir = Path('progp_out')
         if pat_dir.exists():
             shutil.rmtree(pat_dir) if pat_dir.is_dir() else pat_dir.unlink()
@@ -209,6 +205,15 @@ def main():
     except Exception:
         pass
 
+    ## Import batchgen define file
+
+    sys.path.insert(0, '')
+    try:
+        import batchg_define as bd
+    except ModuleNotFoundError:
+        print("ModuleNotFoundError: Please create 'batchg_define' module in current directory")
+        exit(1)
+
     ## Parser register table
 
     if args.txt_table_fp:
@@ -231,7 +236,7 @@ def main():
         if is_active:
             try:
                 if test_plan.UPD_MOD is True:
-                    batch_gen.update_group_pat(test_plan, bat_dir, args.only_type)
+                    batch_gen.upd_group_pat(test_plan, bat_dir, args.only_type)
                 else:
                     batch_gen.gen_group_pat(test_plan, bat_dir, args.only_type)
             except AttributeError: 

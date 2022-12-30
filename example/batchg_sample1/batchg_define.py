@@ -48,3 +48,15 @@ pat_grp = [
     (TestPlan1, True),
     (TestPlan2, True)
 ]
+
+## run command (for batchrun)
+
+def cmd_for_run(cur_dir) -> bool:
+    """Command Run"""  #{{{
+    ## return: is_done
+    ini = cur_dir / Path(test_plan.OUT_PAT).stem + '.ini'
+    os.system("cat {ini}")
+    print('=' * 60)
+    return True
+#}}}
+
