@@ -54,3 +54,8 @@ v0.7.0
     2. batchgen:
         1. Support group update mode.
 
+v0.7.1
+
+    1. Update the format of the excel table.
+    2. Add new tool 'progparser_l1'.
+

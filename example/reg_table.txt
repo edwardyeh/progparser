@@ -15,7 +15,7 @@ T: Group2           # Auto blank line insert between group and group in ini-styl
 
 group2_addr_var1        0x8     31  0   u   y   0xa8a8aa88
 
-===                 # Manual blank line insert by blank descriptor (3 equals) in ini-style reg dump.
+<br>                # Manual blank line insert by blank descriptor (3 equals) in ini-style reg dump.
 
 group2_var2_unsigned    0x14    15  0   u   y   30      # Initial value in text-style table can be hex or dec.
 group2_var2_signed      0x14    31  16  s   y   0xffec  # s: signed register, u: unsigned register
@@ -37,8 +37,8 @@ T: System
 sys_file_path           str     s   "./rand_image_4k.raw" # string and float doesn't support hex value
 sys_var_flt1            float   2.554                     # string and float doesn't support hex out descriptor
 sys_var_flt2            float   -3.1695                   # float is always signed
-sys_var_int1            int     7   0   u   200           # string/float/integer descriptor is always access
-sys_var_int2            int     7   0   s   -100
+sys_var_int1            int     200                       # string/float/integer descriptor is always access
+sys_var_int2            int     -100                      # string quota type: s-single_quota, d-double_quota
 
 ### Use hex out descriptor to dump hex-type value in ini-style reg dump process ###
 

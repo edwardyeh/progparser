@@ -1,31 +1,269 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Copyright (C) 2022 Yeh, Hsin-Hsien <yhh76227@gmail.com>
+# Copyright (C) 2023 Yeh, Hsin-Hsien <yhh76227@gmail.com>
 #
 
 """
-Programming Register Parser
+Programming Register Parser (lite 1)
+====================================
+
+Only support the ini/hex conversion. 
+
 """
 
 import argparse
-import copy
 import os
-import pickle
 import shutil
 import sys
 import textwrap
+
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
-import openpyxl
-
-from .utils.general import PROG_VERSION
-from .utils.general import str2int
-from .utils.ref_table import ReferenceTable
+PROG_VERSION = '0.7.1.lite1'
 
 
 ##############################################################################
 ### Class Definition
+
+def str2int(str_: str, is_signed: bool=False, bits: int=32) -> int:
+    """Convert string to integer (with HEX check)"""
+    if str_.startswith('0x') or str_.startswith('0X') :
+        num = int(str_, 16)
+        if num >> bits:
+            raise ValueError("number overflow")
+        if is_signed:
+            sign = num >> (bits - 1)
+            num |= ~((sign << bits) - 1)
+    else:
+        num = int(str_)
+        if is_signed:
+            bits -= 1
+        if not is_signed and num < 0:
+            raise ValueError("negative value founded in unsigned mode.")
+        elif num > 0 and abs(num) >= (1 << bits):
+            raise ValueError("number overflow")
+        elif num < 0 and abs(num) > (1 << bits):
+            raise ValueError("number overflow")
+            
+    return num
+
+
+@dataclass (slots=True)
+class Reg:
+    name:      str
+    type:      str
+    init_val:  None
+    is_access: bool
+    addr:      int  = None
+    msb:       int  = None
+    lsb:       int  = None
+    is_signed: bool = None
+    comment:   str  = None
+    row_idx:   int  = None
+    extra:     None = None
+
+
+@dataclass (slots=True)
+class RegList:
+    title: str  = None
+    regs:  list = field(default_factory=list)
+
+
+@dataclass (slots=True)
+class INIGroup:
+    tag:     str
+    max_len: int  = 0
+    regs:    list = field(default_factory=list)
+
+
+class ReferenceTable:
+    """Reference table for register parsing"""
+
+    def __init__(self, debug_mode: set=None):
+        # reg_table = {addr1: reg_list1, addr2: reg_list2, ...}
+        # ini_table = [INIGroup1, INIGroup2, ...]
+        self.debug_mode = set() if not debug_mode else debug_mode
+        self.reg_table = {} 
+        self.ini_table = []
+        self.hex_out = set()
+
+    def txt_table_parser(self, table_fp: str):
+        """Parse text style register table"""
+        with open(table_fp, 'r') as f:
+            line = f.readline()
+            line_no = 1
+            while line:
+                toks = line.split()
+                if len(toks):
+                    if toks[0][0] == '#':
+                        pass
+                    elif toks[0] == 'T:':
+                        try:
+                            tag_name = ' '.join(toks[1:]).split('#')[0]
+                            tag_name = tag_name.strip("\"\' ")
+                            self.ini_table.append(INIGroup(tag_name))
+                        except Exception as e:
+                            print('-' * 60)
+                            print("TableParseError: (line: {})".format(line_no))
+                            print("syntax of group descriptor:")
+                            print("  'T: <tag_name>'")
+                            print('-' * 60)
+                            raise e
+                    elif toks[0] == 'A:':
+                        try:
+                            addr = str2int(toks[1])
+                            reg_list = self.reg_table.setdefault(addr, RegList())
+                            if len(toks) > 2:
+                                title = ' '.join(toks[2:]).split('#')[0]
+                                reg_list.title = title.strip("\"\' ")
+                            else:
+                                reg_list.title = None
+                        except Exception as e:
+                            print('-' * 60)
+                            print("TableParseError: (line: {})".format(line_no))
+                            print("syntax of address descriptor:")
+                            print("  'A: <addr> <title>'")
+                            print('-' * 60)
+                            raise e
+                    elif toks[0] == 'H:':
+                        for reg in toks[1:]:
+                            if reg[0] == '#':
+                                break
+                            self.hex_out.add(reg.upper())
+                    elif toks[0] == '<br>':
+                        ini_grp.regs.append(Reg('<br>', *[None]*3))
+                    else:
+                        reg_name = toks[0].upper()
+                        if toks[1] == 'str':
+                            try:
+                                quote_type = toks[2]
+                                init_val = ' '.join(toks[3:])
+                                if init_val[0] == '#':
+                                    raise e
+                                else:
+                                    init_val = init_val.split('#')[0]
+                                    init_val = init_val.strip("\"\' ")
+
+                                reg = Reg(reg_name, 'str', init_val, True, 
+                                          extra=quote_type)
+                            except Exception as e:
+                                print('-' * 70)
+                                print("TableParseError: (line: {})".format(line_no))
+                                print("syntax of string descriptor:")
+                                print("  '<name> str <init_val> [comment]'")
+                                print('-' * 70)
+                                raise e
+                        elif toks[1] == 'float':
+                            try:
+                                if len(toks) < 4:
+                                    comment = None 
+                                else:
+                                    comment = self.txt_get_comment(' '.join(toks[3:])) 
+
+                                reg = Reg(reg_name, 'float', float(toks[2]), True, 
+                                          comment=comment)
+                            except Exception as e:
+                                print('-' * 70)
+                                print("TableParseError: (line: {})".format(line_no))
+                                print("syntax of float descriptor:")
+                                print("  '<name> float <init_val> [comment]'")
+                                print('-' * 70)
+                                raise e
+                        elif toks[1] == 'int':
+                            try:
+                                # msb = str2int(toks[2])
+                                # lsb = str2int(toks[3])
+                                # is_signed = self.sign_check(toks[4])
+                                # init_val = str2int(toks[5], is_signed, msb-lsb+1)
+                                if len(toks) < 4:
+                                    comment = None
+                                else:
+                                    comment = self.txt_get_comment(' '.join(toks[3:]))
+
+                                reg = Reg(reg_name, 'int', int(toks[2]), True, 
+                                          comment=comment)
+                            except Exception as e:
+                                print('-' * 70)
+                                print("TableParseError: (line: {})".format(line_no))
+                                print("syntax of int descriptor:")
+                                print("  '<name> int <msb> <lsb> <sign_type> <init_val> [comment]'")
+                                print('-' * 70)
+                                raise e
+                        else:
+                            try:
+                                addr = str2int(toks[1])
+                                msb = str2int(toks[2])
+                                lsb = str2int(toks[3])
+                                is_signed = self.sign_check(toks[4])
+                                is_access = self.access_check(toks[5])
+                                init_val = str2int(toks[6], is_signed, msb-lsb+1)
+                                if len(toks) < 8:
+                                    comment = None
+                                else:
+                                    comment = self.txt_get_comment(' '.join(toks[7:]))
+
+                                reg = Reg(reg_name, 'reg', init_val, is_access, 
+                                          addr=addr, msb=msb, lsb=lsb, 
+                                          is_signed=is_signed, comment=comment)
+
+                                reg_list = self.reg_table.setdefault(addr, RegList())
+                                reg_list.regs.append(reg)
+                            except Exception as e:
+                                print('-' * 70)
+                                print("TableParseError: (line: {})".format(line_no))
+                                print("syntax of register descriptor:")
+                                print("  '<name> <addr> <msb> <lsb> <sign_type> <is_access> <init_val> [comment]'")
+                                print('-' * 70)
+                                raise e
+
+                        if len(self.ini_table):
+                            ini_grp = self.ini_table[-1]
+                        else:
+                            ini_grp = INIGroup(None)
+                            self.ini_table.append(ini_grp)
+
+                        reg_len = len(reg_name)
+                        if reg_len > ini_grp.max_len:
+                            ini_grp.max_len = reg_len
+                        ini_grp.regs.append(reg)
+
+                line = f.readline()
+                line_no += 1
+
+        if 't' in self.debug_mode:
+            self.show_reg_table("=== REG TABLE PARSER ===")
+            self.show_ini_table("=== INI TABLE PARSER ===")
+
+    def sign_check(self, str_: str) -> bool:
+        """Syntax check for sign type flag"""
+        str_ = str_.lower()
+
+        if str_ == 's':
+            return True
+        elif str_ == 'u':
+            return False
+        else:
+            raise SyntaxError("sign type flag must be 's' or 'u'")
+
+    def access_check(self, str_: str) -> bool:
+        """Syntax check for access flag"""
+        str_ = str_.lower()
+
+        if str_ == 'y':
+            return True
+        elif str_ == 'n':
+            return False
+        else:
+            raise SyntaxError("access flag must be 'y' or 'n'")
+
+    def txt_get_comment(self, str_: str) -> str:
+        """Get register comment"""
+        return None if str_[0] == '#' else str_.split('#')[0].strip("\"\' ")
+
 
 class Pat(NamedTuple):
     name: str
@@ -35,22 +273,12 @@ class Pat(NamedTuple):
 class PatternList(ReferenceTable):
     """Programming pattern list"""
 
-    def __init__(self, table_fp: str, table_type: str, debug_mode: set=None):
+    def __init__(self, table_fp: str, debug_mode: set=None):
         # pat_list = [pat1, pat2, ...]
 
         super().__init__(debug_mode)
         self.pat_list  = []
-
-        if table_type == 'txt':
-            self.txt_table_parser(table_fp)
-        elif table_type == 'xlsx':
-            self.xlsx_table_parser(table_fp)
-        elif table_type == 'db':
-            with open(table_fp, 'rb') as f:
-                self.reg_table = pickle.load(f)
-                self.ini_table = pickle.load(f)
-        else:
-            raise ValueError(f"unsupported register table type ({table_type})")
+        self.txt_table_parser(table_fp)
 
     def ini_parser(self, ini_fp: str, is_batch=False, start=0, end=0):
         """Pattern parser for INI format"""
@@ -155,68 +383,6 @@ class PatternList(ReferenceTable):
             pat_name = os.path.basename(cfg_fp)
             pat_name = os.path.splitext(pat_name)[0]
             self.pat_list.append(Pat(pat_name, pat_regs))
-
-    def xlsx_parser(self, xlsx_fp: str, is_batch=False, start=0, end=0):
-        """Pattern parser for INI format"""
-        wb = openpyxl.load_workbook(xlsx_fp, data_only=True)
-        ws = wb.worksheets[0]
-
-        if is_batch:
-            if start < 6:
-                start = 6
-            elif start > ws.max_column:
-                start = ws.max_column
-
-            if end == 0 or end > ws.max_column:
-                end = ws.max_column
-            elif end < start:
-                end = start
-        elif start < 6:
-            end = start = 6
-        elif start > ws.max_column:
-            end = start = ws.max_column
-        else:
-            end = start
-
-        addr_col = tuple(ws.iter_cols(1, 1, None, None, True))[0]
-        name_col = tuple(ws.iter_cols(5, 5, None, None, True))[0]
-        row_st = addr_col.index('ADDR') + 1
-        row_ed = addr_col.index('none')
-
-        for j in range(start, end+1):
-            val_col = tuple(ws.iter_cols(j, j, None, None, True))[0]
-            pat_name = str(val_col[1]).strip()
-            if pat_name == 'None' or pat_name == '':
-                continue
-
-            try:
-                if ws.cell(2, j).font.__getattr__('color').rgb.lower() == 'ff808080':
-                    continue
-            except Exception:
-                pass
-
-            pat_regs = {}
-            for i in range(row_st, row_ed):
-                reg_name = name_col[i].split('\n')[0]
-                reg_name = reg_name.strip().upper()
-                if reg_name != 'RESERVED':
-                    try:
-                        pat_regs[reg_name] = '0x' + str(val_col[i])
-                    except Exception as e:
-                        print('-' * 60)
-                        print("ExcelRegParseError: (row: {})".format(i+1))
-                        print('-' * 60)
-                        raise e
-
-            if 'p' in self.debug_mode:
-                print(f"=== XLS READ ({pat_name}) ===")
-                for item in pat_regs.items():
-                    print(item)
-                print()
-
-            self.pat_list.append(Pat(pat_name, pat_regs))
-
-        wb.close()
 
     def ini_dump(self, pat_dir, pat_name=None, pat_ext=None, is_force=False, 
                  info_dump=True):
@@ -388,101 +554,6 @@ class PatternList(ReferenceTable):
             print(f"=== Number of pattern ignored:   {pat_ignore}")
             print()
 
-    def xlsx_dump(self, ref_fp : str, pat_dir, pat_name=None, is_force=False, 
-                  is_init=False, info_dump=True):
-        """Dump pattern with excel format"""
-        pname = pat_name if pat_name else 'register'
-        pat_path = pat_dir / (pname + '.xlsx')
-
-        if pat_path.exists() and not is_force:
-            if input(f"{pname+'.xlsx'} existed, overwrite? (y/n) ").lower() != 'y':
-                print('Terminal')
-                exit(0)
-
-        pat_cnt = 0
-        wb = openpyxl.load_workbook(ref_fp)
-        ws = wb.worksheets[0]
-
-        if is_init and ws.max_column >= 6:
-            ws.delete_cols(6, ws.max_column)
-
-        pat_idx = ws.max_column + 1
-        addr_col = tuple(ws.iter_cols(1, 1, None, None, True))[0]
-        row_st = addr_col.index('ADDR') + 2
-        row_ed = addr_col.index('none') + 1
-
-        for i in range(row_st, row_ed):
-            str_ = ws.cell(i, 5).value
-            reg_name = str_.split('\n')[0].strip()
-            if reg_name.upper() == 'RESERVED':
-                row = ws.row_dimensions[i]
-                cell = ws.cell(i, pat_idx, 0)
-                cell.font = copy.copy(row.font)
-                cell.fill = copy.copy(row.fill)
-                cell.border = copy.copy(row.border)
-                cell.alignment = copy.copy(row.alignment)
-
-        for pat in self.pat_list:
-            for reg_list in self.reg_table.values():
-                for reg in reg_list.regs:
-                    bits = reg.msb - reg.lsb + 1
-                    mask = (1 << bits) - 1
-
-                    if not reg.is_access:
-                        reg_val = 0
-                    elif reg.name not in pat.regs:
-                        print(f"[Warning] '{reg.name}' is not found in pattern '{pat.name}', use default value.")
-                        reg_val = reg.init_val
-                    else:
-                        try:
-                            reg_val = str2int(pat.regs[reg.name], 
-                                              reg.is_signed, 
-                                              bits)
-                        except Exception as e:
-                            print('-' * 60)
-                            print("RegisterValueError:")
-                            print("pattern:  {}".format(pat.name))
-                            print("register: {}".format(reg.name))
-                            print('-' * 60)
-                            raise SyntaxError("RegisterValueError") 
-
-                    row = ws.row_dimensions[reg.row_idx]
-                    cell = ws.cell(reg.row_idx, pat_idx, 
-                                   hex(reg_val & mask).upper()[2:])
-                    cell.font = copy.copy(row.font)
-                    cell.fill = copy.copy(row.fill)
-                    cell.border = copy.copy(row.border)
-                    cell.alignment = copy.copy(row.alignment)
-
-            row = ws.row_dimensions[1]
-            cell = ws.cell(1, pat_idx, pat_idx)
-            cell.font = copy.copy(row.font)
-            cell.fill = copy.copy(row.fill)
-            cell.border = copy.copy(row.border)
-            cell.alignment = copy.copy(row.alignment)
-
-            row = ws.row_dimensions[2]
-            cell = ws.cell(2, pat_idx, pat.name)
-            cell.font = copy.copy(row.font)
-            cell.fill = copy.copy(row.fill)
-            cell.border = copy.copy(row.border)
-            cell.alignment = copy.copy(row.alignment)
-
-            pat_idx += 1
-            pat_cnt += 1
-
-        wb.save(pat_path)
-        wb.close()
-
-        if info_dump:
-            print(f"\n=== Number of pattern generated: {pat_cnt}\n")
-
-    def export_table_db(self, db_fp):
-        """Export reference table dtabase (pickle type)"""
-        with open(db_fp, 'wb') as f:
-            pickle.dump(self.reg_table, f)
-            pickle.dump(self.ini_table, f)
-
 
 ##############################################################################
 ### Main Function
@@ -492,68 +563,38 @@ def main():
     parser = argparse.ArgumentParser(
             formatter_class=argparse.RawTextHelpFormatter,
             description=textwrap.dedent("""
-                Programming Register convertor.
+                Programming Register Parser (lite 1).
 
-                Convert register setting between ini/hex/excel format use the reference table.
+                Convert register setting between ini/hex format use the reference table.
                 Output patterns will be exported to the new directory 'progp_out' by default.
 
                 Single-source Examples:
 
-                    @: %(prog)s -t table.txt ini hex reg.ini
+                    @: %(prog)s ini hex table.txt reg.ini
                     
                         Convert a setting from ini to hex by text-style reference table.
 
-                    @: %(prog)s -x table.xlsx ini xlsx reg.ini
-
-                        Copy excel-style reference table and append a converted setting.
-
-                    @: %(prog)s -X table.xlsx ini xlsx reg.ini
-
-                        Create an empty excel reference table and append a converted setting.
-                        
                 Multi-source Examples:
 
-                    @: %(prog)s -t table.txt ini hex <src_list_path> -b
+                    @: %(prog)s ini hex table.txt <src_list_path> -b
 
                         Batch mode, convert all settings in the list.
 
-                    @: %(prog)s -t table.txt ini hex <src_list_path> -b -s 2 -e 5
+                    @: %(prog)s ini hex table.txt <src_list_path> -b -s 2 -e 5
 
                         Batch mode, convert settings from the 2nd row to the 5th row in the list.
-
-                    @: %(prog)s -t table.txt xlsx ini <excel_pat_list> -b -s 6 -e 8
-
-                        Batch mode, convert settings from the 6th column to 8th column in the excel table.
-
-                Convert to ini/hex with any format of reference table is permitted, but convert
-                to excel format by excel-style reference table is necessary.
                 """))
 
-    parser.add_argument('in_fmt', metavar='format_in', choices=['ini', 'hex', 'xlsx'],
-                                    help="input format (choices: ini/hex/xlsx)") 
-    parser.add_argument('out_fmt', metavar='format_out', choices=['ini', 'hex', 'xlsx'], 
-                                    help="output format (choices: ini/hex/xlsx)") 
+    parser.add_argument('in_fmt', metavar='format_in', choices=['ini', 'hex'],
+                                    help="input format (choices: ini/hex)") 
+    parser.add_argument('out_fmt', metavar='format_out', choices=['ini', 'hex'], 
+                                    help="output format (choices: ini/hex)") 
+    parser.add_argument('txt_table_fp', metavar='table_path',
+                                        help="reference table path")
     parser.add_argument('pat_in_fp', metavar='pattern_in',
                                     help="input pattern path") 
 
     parser.add_argument('--version', action='version', version=PROG_VERSION)
-
-    table_gparser = parser.add_mutually_exclusive_group(required=True)
-    table_gparser.add_argument('-t', dest='txt_table_fp', metavar='<path>',
-                                        help="use text-style reference table")
-    table_gparser.add_argument('-x', dest='xlsx_table_fp', metavar='<path>',
-                                        help=textwrap.dedent("""\
-                                        use excel-style reference table (current table append)"""))
-    table_gparser.add_argument('-X', dest='xlsx_table_fp2', metavar='<path>',
-                                        help=textwrap.dedent("""\
-                                        use excel-style reference table (new table create)"""))
-    # table_gparser.add_argument('-d', dest='database_fp', metavar='<path>',
-    #                                     help=textwrap.dedent("""\
-    #                                     use pre-parsed reference table database (pickle type)"""))
-
-    # parser.add_argument('-p', dest='pickle_out_fp', metavar='<path>',
-    #                             help=textwrap.dedent("""\
-    #                             export reference table database (pickle type)"""))
 
     parser.add_argument('-b', dest='is_batch', action='store_true', 
                                 help="enable batch mode")
@@ -588,20 +629,7 @@ def main():
 
     ## Parser register table
 
-    if args.txt_table_fp:
-        pat_list = PatternList(args.txt_table_fp, 'txt', debug_mode)
-    elif args.xlsx_table_fp:
-        pat_list = PatternList(args.xlsx_table_fp, 'xlsx', debug_mode)
-    elif args.xlsx_table_fp2:
-        pat_list = PatternList(args.xlsx_table_fp2, 'xlsx', debug_mode)
-    # else:
-    #     pat_list = PatternList(args.database_fp, 'db', debug_mode)
-
-    ## Only dump reference table database
-
-    # if args.pickle_out_fp:
-    #     pat_list.export_table_db(args.pickle_out_fp)
-    #     return 0
+    pat_list = PatternList(args.txt_table_fp, debug_mode)
 
     ## Parse input pattern
 
@@ -611,9 +639,6 @@ def main():
     elif args.in_fmt == 'hex':
         pat_list.hex_parser(args.pat_in_fp, args.is_batch, 
                             args.start_id, args.end_id)
-    else:
-        pat_list.xlsx_parser(args.pat_in_fp, args.is_batch, 
-                             args.start_id, args.end_id)
 
     ## Dump pattern
 
@@ -623,7 +648,7 @@ def main():
             shutil.rmtree(pat_dir) if pat_dir.is_dir() else pat_dir.unlink()
         pat_dir.mkdir()
     else:
-        if not args.is_batch or args.out_fmt == 'xlsx':
+        if not args.is_batch:
             if (pat_dir := Path(args.cus_dir)).resolve() != Path().resolve():
                 if pat_dir.exists():
                     if (not args.is_force 
@@ -655,19 +680,9 @@ def main():
         pat_list.ini_dump(pat_dir, pat_name, pat_ext, args.is_force)
     elif args.out_fmt == 'hex':
         pat_list.hex_dump(pat_dir, pat_name, pat_ext, args.is_force)
-    else:
-        is_init = True if args.xlsx_table_fp2 else False
-
-        if args.xlsx_table_fp:
-            pat_list.xlsx_dump(args.xlsx_table_fp, pat_dir, pat_name, 
-                               args.is_force, is_init)
-        elif args.xlsx_table_fp2:
-            pat_list.xlsx_dump(args.xlsx_table_fp2, pat_dir, pat_name, 
-                               args.is_force, is_init)
-        else:
-            raise TypeError("need an excel register table when output excel file")
 
 
 if __name__ == '__main__':
     sys.exit(main())
+
 

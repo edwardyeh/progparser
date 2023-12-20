@@ -2,14 +2,16 @@
 #
 # Copyright (C) 2022 Yeh, Hsin-Hsien <yhh76227@gmail.com>
 #
+
 """
 General function set
 """
 
-PROG_VERSION = '0.7.0'
+PROG_VERSION = '0.7.1'
+
 
 def str2int(str_: str, is_signed: bool=False, bits: int=32) -> int:
-    """Convert string to integer (with HEX check)"""  #{{{
+    """Convert string to integer (with HEX check)"""
     if str_.startswith('0x') or str_.startswith('0X') :
         num = int(str_, 16)
         if num >> bits:
@@ -29,5 +31,4 @@ def str2int(str_: str, is_signed: bool=False, bits: int=32) -> int:
             raise ValueError("number overflow")
             
     return num
-#}}}
 
