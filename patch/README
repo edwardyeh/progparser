@@ -1,4 +1,0 @@
-batch_define.sed (for batch_define.py):
-
-    Modify the format of mod_pat_list from the list [(pat_name, mod_regs), ...] to 
-    the dictionary {pat_name: mod_regs, ...}.

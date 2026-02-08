@@ -8,9 +8,12 @@ Programming reference table convertor
 import argparse
 import sys
 import textwrap
+from pathlib import Path
 
-from .utils.general import PROG_VERSION
-from .utils.ref_table import ReferenceTable
+from progparser import __version__
+from progparser.utils.ref_table import ReferenceTable
+
+PROG_VERSION = f'{Path(__file__).stem} version {__version__}'
 
 ### Class Definition ###
 

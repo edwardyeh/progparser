@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "progparser"
+dynamic = ["version"]
+description = "Program Register Convertor."
+readme = "README.md"
+requires-python = ">=3.10"
+
+authors = [
+  { name = "Edward Yeh" }
+]
+
+license = { text = "GPL-2.0" }
+
+#classifiers = [
+#    "Development Status :: 3 - Alpha",
+#    "Intended Audience :: Developers",
+#    "License :: OSI Approved :: MIT License",
+#    "Programming Language :: Python :: 3.10",
+#    "Programming Language :: Python :: 3.11",
+#    "Programming Language :: Python :: 3.12",
+#    "Topic :: Multimedia :: Graphics",
+#]
+
+dependencies = [
+]
+
+[project.scripts]
+batchgen   = "progparser.batchgen:main"
+batchrun   = "progparser.batchrun:main"
+progparser = "progparser.progparser:main"
+tabconv    = "progparser.tabconv:main"
+tabdiff    = "progparser.tabdiff:main"
+tabrsvhide = "progparser.tabrsvhide:main"
+tabrsvmask = "progparser.tabrsvmask:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "progparser.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+#"inc1_cad_tool" = ["example/*.json"]
+
+[project.urls]
+"Homepage" = "https://github.com/edwardyeh/progparser.git"
+

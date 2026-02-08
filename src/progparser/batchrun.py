@@ -13,8 +13,10 @@ import sys
 import textwrap
 from pathlib import Path
 
-from .utils.general import PROG_VERSION
-from .progparser import Pat, PatternList
+from progparser import __version__
+from progparser.progparser import Pat, PatternList
+
+PROG_VERSION = f'{Path(__file__).stem} version {__version__}'
 
 ### Class Definition ###
 

@@ -8,9 +8,11 @@ Reference table for register parsing
 """
 
 from dataclasses import dataclass, field
+
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from .general import str2int 
+
+from progparser.utils.general import str2int
 
 
 @dataclass (slots=True)

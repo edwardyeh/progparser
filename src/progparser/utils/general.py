@@ -7,9 +7,6 @@
 General function set
 """
 
-PROG_VERSION = '0.7.1'
-
-
 def str2int(str_: str, is_signed: bool=False, bits: int=32) -> int:
     """Convert string to integer (with HEX check)"""
     if str_.startswith('0x') or str_.startswith('0X') :
